@@ -29,12 +29,12 @@ Supports **macOS**, **Linux**, and **Windows**.
 
 **macOS / Linux:**
 ```bash
-curl -fsSL https://raw.githubusercontent.com/huyxoann/flutter-build-script/main/setup.sh | bash
+curl -fsSL https://raw.githubusercontent.com/inhvn/flutter-build-script/main/setup.sh | bash
 ```
 
 **Windows (PowerShell):**
 ```powershell
-irm https://raw.githubusercontent.com/huyxoann/flutter-build-script/main/setup.ps1 | iex
+irm https://raw.githubusercontent.com/inhvn/flutter-build-script/main/setup.ps1 | iex
 ```
 
 This clones the repo to `~/.build_script`, installs dependencies (Fastlane, Ruby, Bundler), and adds `build_release` to your PATH.
@@ -42,7 +42,7 @@ This clones the repo to `~/.build_script`, installs dependencies (Fastlane, Ruby
 ### Manual Install (Alternative)
 
 ```bash
-git clone https://github.com/huyxoann/flutter-build-script.git ~/.build_script
+git clone https://github.com/inhvn/flutter-build-script.git ~/.build_script
 ~/.build_script/install.sh          # macOS/Linux
 # or
 ~/.build_script/install.ps1         # Windows
@@ -297,10 +297,10 @@ The first `--distribute` run installs Fastlane gems locally in `build/dist/.fast
 cd ~/.build_script && git pull    # macOS/Linux
 
 # or re-run the one-liner:
-curl -fsSL https://raw.githubusercontent.com/huyxoann/flutter-build-script/main/setup.sh | bash
+curl -fsSL https://raw.githubusercontent.com/inhvn/flutter-build-script/main/setup.sh | bash
 ```
 
 ```powershell
 # Windows
-irm https://raw.githubusercontent.com/huyxoann/flutter-build-script/main/setup.ps1 | iex
+irm https://raw.githubusercontent.com/inhvn/flutter-build-script/main/setup.ps1 | iex
 ```

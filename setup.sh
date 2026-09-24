@@ -4,10 +4,10 @@ set -e
 # ==========================================
 # Remote installer — curl one-liner entry point
 # ==========================================
-# curl -fsSL https://raw.githubusercontent.com/huyxoann/flutter-build-script/main/setup.sh | bash
+# curl -fsSL https://raw.githubusercontent.com/inhvn/flutter-build-script/main/setup.sh | bash
 
 INSTALL_DIR="$HOME/.build_script"
-REPO_URL="https://github.com/huyxoann/flutter-build-script.git"
+REPO_URL="https://github.com/inhvn/flutter-build-script.git"
 
 echo "⚙️  Flutter Build Script — Remote Setup"
 echo ""
