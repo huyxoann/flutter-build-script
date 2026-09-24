@@ -183,6 +183,7 @@ run_setup() {
 detect_firebase_ids() {
   _DETECTED_ANDROID_ID=""
   _DETECTED_IOS_ID=""
+  _DETECTED_PROJECT_ID=""
 
   # 1. firebase.json (FlutterFire CLI)
   if [ -f "firebase.json" ] && command -v python3 &>/dev/null; then
@@ -200,6 +201,14 @@ try:
     print(d['flutter']['platforms']['ios']['default']['appId'])
 except: pass
 " 2>/dev/null)
+    _DETECTED_PROJECT_ID=$(python3 -c "
+import json
+try:
+    d = json.load(open('firebase.json'))
+    p = d['flutter']['platforms']
+    print(p.get('android',{}).get('default',{}).get('projectId','') or p.get('ios',{}).get('default',{}).get('projectId',''))
+except: pass
+" 2>/dev/null)
   fi
 
   # 2. Fallback: google-services.json (Android)
@@ -211,6 +220,15 @@ try:
     print(d['client'][0]['client_info']['mobilesdk_app_id'])
 except: pass
 " 2>/dev/null)
+    if [ -z "$_DETECTED_PROJECT_ID" ]; then
+      _DETECTED_PROJECT_ID=$(python3 -c "
+import json
+try:
+    d = json.load(open('android/app/google-services.json'))
+    print(d['project_info']['project_id'])
+except: pass
+" 2>/dev/null)
+    fi
   fi
 
   # 3. Fallback: GoogleService-Info.plist (iOS)
@@ -219,8 +237,32 @@ except: pass
   fi
 }
 
+detect_firebase_groups() {
+  _DETECTED_TESTER_GROUPS=""
+
+  # Requires firebase CLI + python3 + project ID
+  if ! command -v firebase &>/dev/null || ! command -v python3 &>/dev/null || [ -z "$_DETECTED_PROJECT_ID" ]; then
+    return
+  fi
+
+  local json_output
+  json_output=$(firebase appdistribution:groups:list --project "$_DETECTED_PROJECT_ID" --json 2>/dev/null) || return
+
+  _DETECTED_TESTER_GROUPS=$(python3 -c "
+import json, sys
+try:
+    d = json.loads('''$json_output''')
+    groups = [g['displayName'] for g in d.get('result',{}).get('groups',[])]
+    print(','.join(groups))
+except: pass
+" 2>/dev/null)
+}
+
 create_env_file() {
   detect_firebase_ids
+  detect_firebase_groups
+
+  local tester_groups="${_DETECTED_TESTER_GROUPS:-testers}"
 
   cat > ".build_release.env" << ENV_TEMPLATE
 # ==========================================
@@ -237,7 +279,7 @@ FIREBASE_APP_ID_IOS=$_DETECTED_IOS_ID
 FIREBASE_CLI_TOKEN=
 
 # Default tester groups (comma-separated, can override with --groups)
-FIREBASE_TESTER_GROUPS=testers
+FIREBASE_TESTER_GROUPS=$tester_groups
 
 # Default release notes (can override with --notes)
 FIREBASE_RELEASE_NOTES=
@@ -263,6 +305,9 @@ ENV_TEMPLATE
     echo "   🔍 Auto-detected Firebase App IDs:"
     [ -n "$_DETECTED_ANDROID_ID" ] && echo "      Android: $_DETECTED_ANDROID_ID"
     [ -n "$_DETECTED_IOS_ID" ]     && echo "      iOS:     $_DETECTED_IOS_ID"
+  fi
+  if [ -n "$_DETECTED_TESTER_GROUPS" ]; then
+    echo "   🔍 Auto-detected tester groups: $_DETECTED_TESTER_GROUPS"
   fi
 }
 
