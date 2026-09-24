@@ -48,7 +48,7 @@ $DRY_RUN = $false
 $FIREBASE_APP_ID_ANDROID = ""
 $FIREBASE_APP_ID_IOS = ""
 $FIREBASE_CLI_TOKEN = ""
-$FIREBASE_TESTER_GROUPS = ""
+$FIREBASE_TESTER_GROUPS = "testers"
 $FIREBASE_RELEASE_NOTES = ""
 $GOOGLE_PLAY_JSON_KEY = ""
 
@@ -161,7 +161,7 @@ FIREBASE_APP_ID_IOS=$script:_DetectedIosId
 FIREBASE_CLI_TOKEN=
 
 # Default tester groups (comma-separated, can override with --groups)
-FIREBASE_TESTER_GROUPS=
+FIREBASE_TESTER_GROUPS=testers
 
 # Default release notes (can override with --notes)
 FIREBASE_RELEASE_NOTES=
