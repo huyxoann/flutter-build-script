@@ -518,6 +518,40 @@ validate_credentials() {
     fi
   fi
 
+  # --- Android signing check (release builds for Play Store) ---
+  if [ "$BUILD_MODE" = "release" ] && { [ "$TARGET" = "appbundle" ] || [ "$TARGET" = "apk" ]; }; then
+    local key_props="android/key.properties"
+    if [ ! -f "$key_props" ]; then
+      if [ "$DIST_PLAYSTORE" = true ]; then
+        echo "❌ Android signing not configured: $key_props not found."
+        echo "   Release builds without signing will be rejected by Google Play."
+        echo "   See: https://docs.flutter.dev/deployment/android#sign-the-app"
+        valid=false
+      elif [ "$DIST_FIREBASE" = true ]; then
+        echo "⚠️  No $key_props found — APK will be signed with debug key."
+        echo "   This is OK for Firebase, but not for Play Store."
+      fi
+    else
+      # Verify storeFile exists
+      local store_file
+      store_file=$(grep "^storeFile" "$key_props" 2>/dev/null | head -1 | cut -d'=' -f2- | xargs)
+      if [ -n "$store_file" ]; then
+        # Resolve relative path from android/ dir
+        local resolved_store
+        if [[ "$store_file" = /* ]]; then
+          resolved_store="$store_file"
+        else
+          resolved_store="android/$store_file"
+        fi
+        resolved_store="$(eval echo "$resolved_store")"
+        if [ ! -f "$resolved_store" ]; then
+          echo "❌ Keystore file not found: $resolved_store (from $key_props)"
+          valid=false
+        fi
+      fi
+    fi
+  fi
+
   if [ "$DIST_APPSTORE" = true ]; then
     if [ -z "$ASC_KEY_ID" ]; then
       echo "❌ Missing: ASC_KEY_ID"

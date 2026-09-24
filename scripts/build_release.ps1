@@ -466,6 +466,35 @@ function Validate-Credentials {
         }
     }
 
+    # --- Android signing check (release builds for Play Store) ---
+    if ($BUILD_MODE -eq "release" -and ($TARGET -eq "appbundle" -or $TARGET -eq "apk")) {
+        $keyProps = "android\key.properties"
+        if (-not (Test-Path $keyProps)) {
+            if ($DIST_PLAYSTORE) {
+                Write-Host "❌ Android signing not configured: $keyProps not found." -ForegroundColor Red
+                Write-Host "   Release builds without signing will be rejected by Google Play." -ForegroundColor Red
+                Write-Host "   See: https://docs.flutter.dev/deployment/android#sign-the-app" -ForegroundColor Red
+                $valid = $false
+            } elseif ($DIST_FIREBASE) {
+                Write-Host "⚠️  No $keyProps found — APK will be signed with debug key." -ForegroundColor Yellow
+                Write-Host "   This is OK for Firebase, but not for Play Store." -ForegroundColor Yellow
+            }
+        } else {
+            $storeFileLine = Get-Content $keyProps | Where-Object { $_ -match "^storeFile\s*=" } | Select-Object -First 1
+            if ($storeFileLine) {
+                $storeFile = ($storeFileLine -split "=", 2)[1].Trim()
+                if (-not [System.IO.Path]::IsPathRooted($storeFile)) {
+                    $storeFile = Join-Path "android" $storeFile
+                }
+                $storeFile = $storeFile.Replace("~", $env:USERPROFILE)
+                if (-not (Test-Path $storeFile)) {
+                    Write-Host "❌ Keystore file not found: $storeFile (from $keyProps)" -ForegroundColor Red
+                    $valid = $false
+                }
+            }
+        }
+    }
+
     if (-not $valid) {
         Write-Host "`nConfigure credentials in .build_release.env (see .build_release.env.example)."
         exit 1
