@@ -523,12 +523,25 @@ function Validate-Credentials {
             $storeFileLine = Get-Content $keyProps | Where-Object { $_ -match "^storeFile\s*=" } | Select-Object -First 1
             if ($storeFileLine) {
                 $storeFile = ($storeFileLine -split "=", 2)[1].Trim()
-                if (-not [System.IO.Path]::IsPathRooted($storeFile)) {
-                    $storeFile = Join-Path "android" $storeFile
+                $found = $false
+                if ([System.IO.Path]::IsPathRooted($storeFile) -or $storeFile.StartsWith("~")) {
+                    $resolvedStore = $storeFile.Replace("~", $env:USERPROFILE)
+                    if (Test-Path $resolvedStore) { $found = $true }
+                } else {
+                    $candidates = @(
+                        (Join-Path "android\app" $storeFile),
+                        (Join-Path "android" $storeFile),
+                        $storeFile
+                    )
+                    foreach ($cand in $candidates) {
+                        if (Test-Path $cand) {
+                            $found = $true
+                            break
+                        }
+                    }
                 }
-                $storeFile = $storeFile.Replace("~", $env:USERPROFILE)
-                if (-not (Test-Path $storeFile)) {
-                    Write-Host "❌ Keystore file not found: $storeFile (from $keyProps)" -ForegroundColor Red
+                if (-not $found) {
+                    Write-Host "❌ Keystore file not found: $storeFile (checked android\app\, android\) (from $keyProps)" -ForegroundColor Red
                     $valid = $false
                 }
             }

@@ -579,16 +579,25 @@ validate_credentials() {
       local store_file
       store_file=$(grep "^storeFile" "$key_props" 2>/dev/null | head -1 | cut -d'=' -f2- | xargs)
       if [ -n "$store_file" ]; then
-        # Resolve relative path from android/ dir
-        local resolved_store
-        if [[ "$store_file" = /* ]]; then
-          resolved_store="$store_file"
+        local found=false
+        if [[ "$store_file" = /* ]] || [[ "$store_file" == ~* ]]; then
+          local resolved_store
+          resolved_store="$(eval echo "$store_file")"
+          if [ -f "$resolved_store" ]; then
+            found=true
+          fi
         else
-          resolved_store="android/$store_file"
+          # Relative path can be relative to android/app/, android/, or project root
+          for candidate in "android/app/$store_file" "android/$store_file" "$store_file"; do
+            if [ -f "$candidate" ]; then
+              found=true
+              break
+            fi
+          done
         fi
-        resolved_store="$(eval echo "$resolved_store")"
-        if [ ! -f "$resolved_store" ]; then
-          echo "❌ Keystore file not found: $resolved_store (from $key_props)"
+
+        if [ "$found" = false ]; then
+          echo "❌ Keystore file not found: $store_file (checked android/app/, android/) (from $key_props)"
           valid=false
         fi
       fi
