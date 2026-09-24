@@ -272,22 +272,27 @@ fi
 check_dependencies() {
   local missing=false
 
+  if ! command -v brew &>/dev/null; then
+    echo "❌ Homebrew is not installed."
+    echo "   Install from: https://brew.sh"
+    missing=true
+  fi
+
   if ! command -v ruby &>/dev/null; then
     echo "❌ Ruby is not installed."
     echo "   Install with: brew install ruby"
     missing=true
   fi
 
-  if ! command -v bundle &>/dev/null; then
-    echo "❌ Bundler is not installed."
-    echo "   Install with: gem install bundler"
+  if ! command -v fastlane &>/dev/null; then
+    echo "❌ Fastlane is not installed."
+    echo "   Install with: brew install fastlane"
     missing=true
   fi
 
-  if ! command -v fastlane &>/dev/null; then
-    echo "❌ Fastlane is not installed."
-    echo "   Install with: gem install fastlane"
-    echo "            or:  brew install fastlane"
+  if ! command -v bundle &>/dev/null; then
+    echo "❌ Bundler is not installed."
+    echo "   Install with: brew install fastlane  (includes bundler)"
     missing=true
   fi
 

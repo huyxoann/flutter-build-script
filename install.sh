@@ -65,23 +65,11 @@ install_dependencies() {
       gem install bundler
     fi
   else
-    # No brew — fall back to gem
-    if [ "$need_ruby" = true ]; then
-      echo "❌ Ruby is not installed and Homebrew is not available."
-      echo "   Install Homebrew first: https://brew.sh"
-      echo "   Then re-run this installer."
-      exit 1
-    fi
-
-    if [ "$need_fastlane" = true ]; then
-      echo "   Installing Fastlane via gem..."
-      gem install fastlane
-    fi
-
-    if [ "$need_bundler" = true ]; then
-      echo "   Installing Bundler via gem..."
-      gem install bundler
-    fi
+    # No brew — require it
+    echo "❌ Homebrew is required to install dependencies."
+    echo "   Install Homebrew first: https://brew.sh"
+    echo "   Then re-run this installer."
+    exit 1
   fi
 
   echo "✅ Dependencies installed."
