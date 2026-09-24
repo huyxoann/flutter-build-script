@@ -53,6 +53,7 @@ FIREBASE_CLI_TOKEN=""
 FIREBASE_TESTER_GROUPS="testers"
 FIREBASE_RELEASE_NOTES=""
 GOOGLE_PLAY_JSON_KEY=""
+ANDROID_PACKAGE_NAME=""
 ASC_KEY_ID=""
 ASC_ISSUER_ID=""
 ASC_KEY_FILE=""
@@ -87,6 +88,7 @@ Distribution:
   --distribute <targets>   Comma-separated: firebase, playstore, appstore
   --platform <os>          android or ios (required for firebase)
   --track <track>          Google Play track: internal, alpha, beta, production [Default: internal]
+  --package-name <pkg>     Android package name (auto-detected if omitted)
   --groups <groups>        Firebase tester groups, comma-separated
   --notes <text>           Release notes for Firebase distribution
   --distribute-only        Skip build, distribute latest artifact from build/dist/
@@ -258,6 +260,45 @@ except: pass
 " 2>/dev/null)
 }
 
+detect_android_package_name() {
+  _DETECTED_ANDROID_PACKAGE=""
+
+  # 1. build.gradle.kts or build.gradle (applicationId has priority over namespace)
+  local gradle_file
+  for gradle_file in "android/app/build.gradle.kts" "android/app/build.gradle"; do
+    if [ -f "$gradle_file" ]; then
+      local pkg
+      pkg=$(sed -n -E 's/^[[:space:]]*applicationId[[:space:]=]+["'"'"']([^"'"'"']+)["'"'"'].*/\1/p' "$gradle_file" | head -1)
+      if [ -z "$pkg" ]; then
+        pkg=$(sed -n -E 's/^[[:space:]]*namespace[[:space:]=]+["'"'"']([^"'"'"']+)["'"'"'].*/\1/p' "$gradle_file" | head -1)
+      fi
+      if [ -n "$pkg" ]; then
+        _DETECTED_ANDROID_PACKAGE="$pkg"
+        return
+      fi
+    fi
+  done
+
+  # 2. Fallback: google-services.json
+  if [ -f "android/app/google-services.json" ] && command -v python3 &>/dev/null; then
+    _DETECTED_ANDROID_PACKAGE=$(python3 -c "
+import json
+try:
+    d = json.load(open('android/app/google-services.json'))
+    print(d['client'][0]['client_info']['android_client_info']['package_name'])
+except: pass
+" 2>/dev/null)
+    if [ -n "$_DETECTED_ANDROID_PACKAGE" ]; then
+      return
+    fi
+  fi
+
+  # 3. Fallback: AndroidManifest.xml
+  if [ -f "android/app/src/main/AndroidManifest.xml" ]; then
+    _DETECTED_ANDROID_PACKAGE=$(sed -n -E 's/.*package=["'"'"']([^"'"'"']+)["'"'"'].*/\1/p' "android/app/src/main/AndroidManifest.xml" | head -1)
+  fi
+}
+
 detect_machine_credentials() {
   _DETECTED_GPLAY_KEY=""
   _DETECTED_ASC_KEY_FILE=""
@@ -297,6 +338,7 @@ create_env_file() {
   detect_firebase_ids
   detect_firebase_groups
   detect_machine_credentials
+  detect_android_package_name
 
   local tester_groups="${_DETECTED_TESTER_GROUPS:-testers}"
 
@@ -321,6 +363,9 @@ FIREBASE_TESTER_GROUPS=$tester_groups
 FIREBASE_RELEASE_NOTES=
 
 # === Google Play Store ===
+# Android Package Name / Application ID (auto-detected if blank)
+ANDROID_PACKAGE_NAME=$_DETECTED_ANDROID_PACKAGE
+
 # Path to service account JSON key file
 # Create at: Google Cloud Console > IAM > Service Accounts
 GOOGLE_PLAY_JSON_KEY=$_DETECTED_GPLAY_KEY
@@ -344,6 +389,9 @@ ENV_TEMPLATE
   fi
   if [ -n "$_DETECTED_TESTER_GROUPS" ]; then
     echo "   🔍 Auto-detected tester groups: $_DETECTED_TESTER_GROUPS"
+  fi
+  if [ -n "$_DETECTED_ANDROID_PACKAGE" ]; then
+    echo "   🔍 Auto-detected Android package name: $_DETECTED_ANDROID_PACKAGE"
   fi
   if [ -n "$_DETECTED_GPLAY_KEY" ]; then
     echo "   🔍 Auto-detected Google Play key: $_DETECTED_GPLAY_KEY"
@@ -381,6 +429,10 @@ while [[ $# -gt 0 ]]; do
       PLAY_TRACK="$2"; shift 2 ;;
     --track=*)
       PLAY_TRACK="${1#*=}"; shift ;;
+    --package-name)
+      ANDROID_PACKAGE_NAME="$2"; shift 2 ;;
+    --package-name=*)
+      ANDROID_PACKAGE_NAME="${1#*=}"; shift ;;
     --groups)
       DIST_GROUPS="$2"; shift 2 ;;
     --groups=*)
@@ -407,6 +459,12 @@ done
 # Apply defaults from config (CLI flags take priority)
 DIST_GROUPS="${DIST_GROUPS:-$FIREBASE_TESTER_GROUPS}"
 DIST_NOTES="${DIST_NOTES:-$FIREBASE_RELEASE_NOTES}"
+
+# Auto-detect Android package name if not explicitly set
+if [ -z "$ANDROID_PACKAGE_NAME" ]; then
+  detect_android_package_name
+  ANDROID_PACKAGE_NAME="$_DETECTED_ANDROID_PACKAGE"
+fi
 
 # ==========================================
 # VALIDATE DISTRIBUTE TARGETS & INFER BUILD TARGET
@@ -548,6 +606,11 @@ validate_credentials() {
   fi
 
   if [ "$DIST_PLAYSTORE" = true ]; then
+    if [ -z "$ANDROID_PACKAGE_NAME" ]; then
+      echo "❌ Could not detect Android package name (applicationId)."
+      echo "   Please set ANDROID_PACKAGE_NAME in .build_release.env or pass --package-name <pkg>"
+      valid=false
+    fi
     if [ -z "$GOOGLE_PLAY_JSON_KEY" ]; then
       echo "❌ Missing: GOOGLE_PLAY_JSON_KEY"
       valid=false
@@ -684,6 +747,7 @@ end
 
 lane :distribute_playstore do |options|
   upload_to_play_store(
+    package_name: options[:package_name],
     aab: options[:artifact_path],
     json_key: options[:json_key],
     track: options[:track] || 'internal',
@@ -768,6 +832,7 @@ distribute_to_playstore() {
   echo ""
   echo "🏪 Google Play Store"
   echo "   Track     : $PLAY_TRACK"
+  echo "   Package   : $ANDROID_PACKAGE_NAME"
   echo "   Artifact  : $artifact_path"
 
   if [ "$DRY_RUN" = true ]; then
@@ -776,6 +841,7 @@ distribute_to_playstore() {
   fi
 
   run_fastlane_lane distribute_playstore \
+    "package_name:$ANDROID_PACKAGE_NAME" \
     "artifact_path:$abs_path" \
     "json_key:$resolved_key" \
     "track:$PLAY_TRACK"

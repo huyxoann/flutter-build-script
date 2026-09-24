@@ -178,6 +178,7 @@ build_release --distribute appstore --distribute-only
 | `--distribute <targets>` | Comma-separated: `firebase`, `playstore`, `appstore` | _(none)_ |
 | `--platform <android\|ios>` | Required for `firebase` | _(none)_ |
 | `--track <track>` | Play Store track: `internal`, `alpha`, `beta`, `production` | `internal` |
+| `--package-name <pkg>` | Android package name (auto-detected from `build.gradle` if omitted) | _(auto)_ |
 | `--groups <groups>` | Firebase tester groups (comma-separated) | from `.build_release.env` |
 | `--notes <text>` | Firebase release notes | from `.build_release.env` |
 | `--distribute-only` | Skip build, use latest artifact | ❌ No |

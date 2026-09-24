@@ -51,6 +51,7 @@ $FIREBASE_CLI_TOKEN = ""
 $FIREBASE_TESTER_GROUPS = "testers"
 $FIREBASE_RELEASE_NOTES = ""
 $GOOGLE_PLAY_JSON_KEY = ""
+$ANDROID_PACKAGE_NAME = ""
 
 # ==========================================
 # LOAD PROJECT CONFIG
@@ -144,6 +145,43 @@ function Detect-FirebaseIds {
     }
 }
 
+function Detect-AndroidPackageName {
+    $script:_DetectedAndroidPackage = ""
+
+    $gradleFiles = @("android\app\build.gradle.kts", "android\app\build.gradle")
+    foreach ($file in $gradleFiles) {
+        if (Test-Path $file) {
+            $content = Get-Content $file -Raw
+            if ($content -match '(?m)^\s*applicationId\s*=?\s*["'']([^"'']+)["'']') {
+                $script:_DetectedAndroidPackage = $Matches[1]
+                return
+            }
+            if ($content -match '(?m)^\s*namespace\s*=?\s*["'']([^"'']+)["'']') {
+                $script:_DetectedAndroidPackage = $Matches[1]
+                return
+            }
+        }
+    }
+
+    if (Test-Path "android\app\google-services.json") {
+        try {
+            $gsJson = Get-Content "android\app\google-services.json" -Raw | ConvertFrom-Json
+            if ($null -ne $gsJson.client[0].client_info.android_client_info.package_name) {
+                $script:_DetectedAndroidPackage = $gsJson.client[0].client_info.android_client_info.package_name
+                return
+            }
+        } catch { }
+    }
+
+    if (Test-Path "android\app\src\main\AndroidManifest.xml") {
+        $content = Get-Content "android\app\src\main\AndroidManifest.xml" -Raw
+        if ($content -match 'package\s*=\s*["'']([^"'']+)["'']') {
+            $script:_DetectedAndroidPackage = $Matches[1]
+            return
+        }
+    }
+}
+
 function Detect-MachineCredentials {
     $script:_DetectedGplayKey = ""
     $script:_DetectedAscKeyFile = ""
@@ -177,6 +215,7 @@ function Detect-MachineCredentials {
 function Create-EnvFile {
     Detect-FirebaseIds
     Detect-MachineCredentials
+    Detect-AndroidPackageName
     $envTemplate = @"
 # ==========================================
 # .build_release.env — Project Build & Distribution Config
@@ -198,6 +237,9 @@ FIREBASE_TESTER_GROUPS=testers
 FIREBASE_RELEASE_NOTES=
 
 # === Google Play Store ===
+# Android Package Name / Application ID (auto-detected if blank)
+ANDROID_PACKAGE_NAME=$script:_DetectedAndroidPackage
+
 # Path to service account JSON key file
 # Create at: Google Cloud Console > IAM > Service Accounts
 GOOGLE_PLAY_JSON_KEY=$script:_DetectedGplayKey
@@ -219,6 +261,9 @@ ASC_KEY_FILE=$script:_DetectedAscKeyFile
         Write-Host "   🔍 Auto-detected Firebase App IDs:" -ForegroundColor Cyan
         if (-not [string]::IsNullOrEmpty($script:_DetectedAndroidId)) { Write-Host "      Android: $script:_DetectedAndroidId" -ForegroundColor Cyan }
         if (-not [string]::IsNullOrEmpty($script:_DetectedIosId)) { Write-Host "      iOS:     $script:_DetectedIosId" -ForegroundColor Cyan }
+    }
+    if (-not [string]::IsNullOrEmpty($script:_DetectedAndroidPackage)) {
+        Write-Host "   🔍 Auto-detected Android Package: $script:_DetectedAndroidPackage" -ForegroundColor Cyan
     }
     if (-not [string]::IsNullOrEmpty($script:_DetectedGplayKey)) {
         Write-Host "   🔍 Auto-detected Google Play key: $script:_DetectedGplayKey" -ForegroundColor Cyan
@@ -252,6 +297,7 @@ Distribution:
   --distribute <targets>   Comma-separated: firebase, playstore
   --platform <os>          android (required for firebase)
   --track <track>          Google Play track: internal, alpha, beta, production [Default: internal]
+  --package-name <pkg>     Android package name (auto-detected if omitted)
   --groups <groups>        Firebase tester groups, comma-separated
   --notes <text>           Release notes for Firebase distribution
   --distribute-only        Skip build, distribute latest artifact from build\dist\
@@ -325,6 +371,12 @@ while ($i -lt $args.Count) {
         "^--track=(.*)$" {
             $PLAY_TRACK = $Matches[1]; $i++; break
         }
+        "^--package-name$" {
+            if ($i + 1 -lt $args.Count) { $ANDROID_PACKAGE_NAME = $args[$i+1]; $i += 2 } else { Write-Host "❌ Missing value for --package-name" -ForegroundColor Red; exit 1 }; break
+        }
+        "^--package-name=(.*)$" {
+            $ANDROID_PACKAGE_NAME = $Matches[1]; $i++; break
+        }
         "^--groups$" {
             if ($i + 1 -lt $args.Count) { $DIST_GROUPS = $args[$i+1]; $i += 2 } else { Write-Host "❌ Missing value for --groups" -ForegroundColor Red; exit 1 }; break
         }
@@ -360,6 +412,12 @@ while ($i -lt $args.Count) {
 # Apply defaults from config (CLI flags take priority)
 if ([string]::IsNullOrEmpty($DIST_GROUPS)) { $DIST_GROUPS = $FIREBASE_TESTER_GROUPS }
 if ([string]::IsNullOrEmpty($DIST_NOTES)) { $DIST_NOTES = $FIREBASE_RELEASE_NOTES }
+
+# Auto-detect Android package name if not explicitly set
+if ([string]::IsNullOrWhiteSpace($ANDROID_PACKAGE_NAME)) {
+    Detect-AndroidPackageName
+    $ANDROID_PACKAGE_NAME = $script:_DetectedAndroidPackage
+}
 
 # ==========================================
 # VALIDATE DISTRIBUTE TARGETS & INFER BUILD TARGET
@@ -494,6 +552,11 @@ function Validate-Credentials {
     }
 
     if ($DIST_PLAYSTORE) {
+        if ([string]::IsNullOrWhiteSpace($ANDROID_PACKAGE_NAME)) {
+            Write-Host "❌ Could not detect Android package name (applicationId)." -ForegroundColor Red
+            Write-Host "   Please set ANDROID_PACKAGE_NAME in .build_release.env or pass --package-name <pkg>" -ForegroundColor Red
+            $valid = $false
+        }
         if ([string]::IsNullOrEmpty($GOOGLE_PLAY_JSON_KEY)) {
             Write-Host "❌ Missing: GOOGLE_PLAY_JSON_KEY" -ForegroundColor Red
             $valid = $false
@@ -602,6 +665,7 @@ end
 
 lane :distribute_playstore do |options|
   upload_to_play_store(
+    package_name: options[:package_name],
     aab: options[:artifact_path],
     json_key: options[:json_key],
     track: options[:track] || 'internal',
@@ -680,6 +744,7 @@ function Distribute-ToPlaystore {
 
     Write-Host "`n🏪 Google Play Store"
     Write-Host "   Track     : $PLAY_TRACK"
+    Write-Host "   Package   : $ANDROID_PACKAGE_NAME"
     Write-Host "   Artifact  : $ArtifactPath"
 
     if ($DRY_RUN) {
@@ -688,6 +753,7 @@ function Distribute-ToPlaystore {
     }
 
     Run-FastlaneLane -lane "distribute_playstore" -argsParams @(
+        "package_name:$ANDROID_PACKAGE_NAME",
         "artifact_path:$abs_path",
         "json_key:$resolved_key",
         "track:$PLAY_TRACK"
