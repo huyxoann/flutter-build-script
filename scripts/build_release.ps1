@@ -535,7 +535,8 @@ end
     Write-Host "📦 Installing Fastlane dependencies (this may take a moment on first run)..." -ForegroundColor Cyan
     Push-Location $FASTLANE_WORK_DIR
     try {
-        bundle install --path vendor/bundle --quiet
+        bundle config set --local path vendor/bundle 2>$null
+        bundle install --quiet
         if ($LASTEXITCODE -ne 0) { throw "bundle install failed" }
     } finally {
         Pop-Location

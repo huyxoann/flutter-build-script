@@ -579,7 +579,7 @@ FASTFILE_CONTENT
 
   # --- Install gems ---
   echo "📦 Installing Fastlane dependencies (this may take a moment on first run)..."
-  (cd "$FASTLANE_WORK_DIR" && bundle install --path vendor/bundle --quiet 2>&1)
+  (cd "$FASTLANE_WORK_DIR" && bundle config set --local path vendor/bundle &>/dev/null && bundle install --quiet 2>&1)
 }
 
 run_fastlane_lane() {
