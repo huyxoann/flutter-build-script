@@ -180,8 +180,49 @@ run_setup() {
   exit 0
 }
 
+detect_firebase_ids() {
+  _DETECTED_ANDROID_ID=""
+  _DETECTED_IOS_ID=""
+
+  # 1. firebase.json (FlutterFire CLI)
+  if [ -f "firebase.json" ] && command -v python3 &>/dev/null; then
+    _DETECTED_ANDROID_ID=$(python3 -c "
+import json
+try:
+    d = json.load(open('firebase.json'))
+    print(d['flutter']['platforms']['android']['default']['appId'])
+except: pass
+" 2>/dev/null)
+    _DETECTED_IOS_ID=$(python3 -c "
+import json
+try:
+    d = json.load(open('firebase.json'))
+    print(d['flutter']['platforms']['ios']['default']['appId'])
+except: pass
+" 2>/dev/null)
+  fi
+
+  # 2. Fallback: google-services.json (Android)
+  if [ -z "$_DETECTED_ANDROID_ID" ] && [ -f "android/app/google-services.json" ] && command -v python3 &>/dev/null; then
+    _DETECTED_ANDROID_ID=$(python3 -c "
+import json
+try:
+    d = json.load(open('android/app/google-services.json'))
+    print(d['client'][0]['client_info']['mobilesdk_app_id'])
+except: pass
+" 2>/dev/null)
+  fi
+
+  # 3. Fallback: GoogleService-Info.plist (iOS)
+  if [ -z "$_DETECTED_IOS_ID" ] && [ -f "ios/Runner/GoogleService-Info.plist" ]; then
+    _DETECTED_IOS_ID=$(/usr/libexec/PlistBuddy -c "Print :GOOGLE_APP_ID" "ios/Runner/GoogleService-Info.plist" 2>/dev/null || true)
+  fi
+}
+
 create_env_file() {
-  cat > ".build_release.env" << 'ENV_TEMPLATE'
+  detect_firebase_ids
+
+  cat > ".build_release.env" << ENV_TEMPLATE
 # ==========================================
 # .build_release.env — Project Build & Distribution Config
 # ==========================================
@@ -189,8 +230,8 @@ create_env_file() {
 
 # === Firebase App Distribution ===
 # App IDs from Firebase Console > Project Settings > General > Your apps
-FIREBASE_APP_ID_ANDROID=
-FIREBASE_APP_ID_IOS=
+FIREBASE_APP_ID_ANDROID=$_DETECTED_ANDROID_ID
+FIREBASE_APP_ID_IOS=$_DETECTED_IOS_ID
 
 # Firebase CLI token (generate with: firebase login:ci)
 FIREBASE_CLI_TOKEN=
@@ -216,7 +257,13 @@ ASC_KEY_FILE=
 # Path to ExportOptions.plist for manual signing (omit for Xcode automatic signing)
 # IOS_EXPORT_OPTIONS_PLIST=ios/ExportOptions.plist
 ENV_TEMPLATE
+
   echo "✅ Created .build_release.env"
+  if [ -n "$_DETECTED_ANDROID_ID" ] || [ -n "$_DETECTED_IOS_ID" ]; then
+    echo "   🔍 Auto-detected Firebase App IDs:"
+    [ -n "$_DETECTED_ANDROID_ID" ] && echo "      Android: $_DETECTED_ANDROID_ID"
+    [ -n "$_DETECTED_IOS_ID" ]     && echo "      iOS:     $_DETECTED_IOS_ID"
+  fi
 }
 
 # ==========================================

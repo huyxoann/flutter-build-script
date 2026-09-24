@@ -116,7 +116,36 @@ function Run-Setup {
     exit 0
 }
 
+function Detect-FirebaseIds {
+    $script:_DetectedAndroidId = ""
+    $script:_DetectedIosId = ""
+
+    # Check firebase.json
+    if (Test-Path "firebase.json") {
+        try {
+            $fbJson = Get-Content "firebase.json" -Raw | ConvertFrom-Json
+            if ($null -ne $fbJson.flutter.platforms.android.default.appId) {
+                $script:_DetectedAndroidId = $fbJson.flutter.platforms.android.default.appId
+            }
+            if ($null -ne $fbJson.flutter.platforms.ios.default.appId) {
+                $script:_DetectedIosId = $fbJson.flutter.platforms.ios.default.appId
+            }
+        } catch { }
+    }
+
+    # Fallback Android
+    if ([string]::IsNullOrEmpty($script:_DetectedAndroidId) -and (Test-Path "android\app\google-services.json")) {
+        try {
+            $gsJson = Get-Content "android\app\google-services.json" -Raw | ConvertFrom-Json
+            if ($null -ne $gsJson.client[0].client_info.mobilesdk_app_id) {
+                $script:_DetectedAndroidId = $gsJson.client[0].client_info.mobilesdk_app_id
+            }
+        } catch { }
+    }
+}
+
 function Create-EnvFile {
+    Detect-FirebaseIds
     $envTemplate = @"
 # ==========================================
 # .build_release.env — Project Build & Distribution Config
@@ -125,8 +154,8 @@ function Create-EnvFile {
 
 # === Firebase App Distribution ===
 # App IDs from Firebase Console > Project Settings > General > Your apps
-FIREBASE_APP_ID_ANDROID=
-FIREBASE_APP_ID_IOS=
+FIREBASE_APP_ID_ANDROID=$script:_DetectedAndroidId
+FIREBASE_APP_ID_IOS=$script:_DetectedIosId
 
 # Firebase CLI token (generate with: firebase login:ci)
 FIREBASE_CLI_TOKEN=
@@ -154,6 +183,12 @@ ASC_KEY_FILE=
 "@
     Set-Content -Path ".build_release.env" -Value $envTemplate -Encoding UTF8
     Write-Host "✅ Created .build_release.env" -ForegroundColor Green
+
+    if (-not [string]::IsNullOrEmpty($script:_DetectedAndroidId) -or -not [string]::IsNullOrEmpty($script:_DetectedIosId)) {
+        Write-Host "   🔍 Auto-detected Firebase App IDs:" -ForegroundColor Cyan
+        if (-not [string]::IsNullOrEmpty($script:_DetectedAndroidId)) { Write-Host "      Android: $script:_DetectedAndroidId" -ForegroundColor Cyan }
+        if (-not [string]::IsNullOrEmpty($script:_DetectedIosId)) { Write-Host "      iOS:     $script:_DetectedIosId" -ForegroundColor Cyan }
+    }
 }
 
 # ==========================================
