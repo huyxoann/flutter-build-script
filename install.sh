@@ -4,7 +4,7 @@ set -e
 # ==========================================
 # build_script installer
 # ==========================================
-# Symlinks `build_release` into ~/.local/bin so it's available globally.
+# Installs `build_release` CLI and its dependencies.
 #
 # Usage:
 #   ./install.sh              Install
@@ -30,7 +30,65 @@ if [ "${1:-}" = "--uninstall" ]; then
 fi
 
 # ------------------------------------------
-# Install
+# Install dependencies
+# ------------------------------------------
+install_dependencies() {
+  local need_ruby=false need_bundler=false need_fastlane=false
+
+  command -v ruby    &>/dev/null || need_ruby=true
+  command -v bundle  &>/dev/null || need_bundler=true
+  command -v fastlane &>/dev/null || need_fastlane=true
+
+  if [ "$need_ruby" = false ] && [ "$need_bundler" = false ] && [ "$need_fastlane" = false ]; then
+    echo "✅ Dependencies: ruby $(ruby -e 'print RUBY_VERSION'), bundler, fastlane — all present."
+    return 0
+  fi
+
+  echo ""
+  echo "📦 Installing missing dependencies..."
+
+  # Prefer brew on macOS
+  if command -v brew &>/dev/null; then
+    if [ "$need_ruby" = true ]; then
+      echo "   Installing Ruby via Homebrew..."
+      brew install ruby
+    fi
+
+    if [ "$need_fastlane" = true ]; then
+      echo "   Installing Fastlane via Homebrew..."
+      brew install fastlane
+      need_bundler=false  # brew fastlane bundles bundler
+    fi
+
+    if [ "$need_bundler" = true ]; then
+      echo "   Installing Bundler..."
+      gem install bundler
+    fi
+  else
+    # No brew — fall back to gem
+    if [ "$need_ruby" = true ]; then
+      echo "❌ Ruby is not installed and Homebrew is not available."
+      echo "   Install Homebrew first: https://brew.sh"
+      echo "   Then re-run this installer."
+      exit 1
+    fi
+
+    if [ "$need_fastlane" = true ]; then
+      echo "   Installing Fastlane via gem..."
+      gem install fastlane
+    fi
+
+    if [ "$need_bundler" = true ]; then
+      echo "   Installing Bundler via gem..."
+      gem install bundler
+    fi
+  fi
+
+  echo "✅ Dependencies installed."
+}
+
+# ------------------------------------------
+# Install CLI
 # ------------------------------------------
 if [ ! -f "$SCRIPT_PATH" ]; then
   echo "❌ Script not found: $SCRIPT_PATH"
@@ -38,6 +96,12 @@ if [ ! -f "$SCRIPT_PATH" ]; then
   exit 1
 fi
 
+echo "⚙️  Installing build_release CLI..."
+echo ""
+
+install_dependencies
+
+echo ""
 chmod +x "$SCRIPT_PATH"
 mkdir -p "$BIN_DIR"
 ln -sf "$SCRIPT_PATH" "$LINK_PATH"
