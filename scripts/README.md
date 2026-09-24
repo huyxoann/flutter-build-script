@@ -22,22 +22,34 @@ A standardized Bash script to automate Flutter release builds **and distribute**
 
 ## 📦 Installation & Setup
 
-### Step 1: Copy the Script
+### Global Install (Recommended)
 
-Place `build_release.sh` inside a `scripts/` directory at your Flutter project root:
+Install once on your machine, use in any Flutter project:
+
+```bash
+# Symlink to PATH (assumes ~/.local/bin is in PATH)
+ln -sf /path/to/build_script/scripts/build_release.sh ~/.local/bin/build_release
+
+# Verify
+build_release --help
+```
+
+Then just `cd` into any Flutter project and run:
+
+```bash
+build_release                          # Build AAB (default)
+build_release --distribute playstore   # Build & distribute
+```
+
+### Per-Project Install (Alternative)
+
+Copy the script into a specific project's `scripts/` directory:
 
 ```bash
 mkdir -p scripts
 cp /path/to/build_script/scripts/build_release.sh scripts/
 chmod +x scripts/build_release.sh
-```
-
-### Step 2: Configure Distribution (Optional)
-
-If you want to use distribution features, create `.build_release.env` at the project root:
-
-```bash
-cp /path/to/build_script/.build_release.env.example .build_release.env
+./scripts/build_release.sh --help
 ```
 
 Edit `.build_release.env` with your project's credentials:

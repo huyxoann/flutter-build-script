@@ -10,7 +10,21 @@ set -e
 #
 # Run with --help for usage.
 
-PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# Resolve project root: if script lives in <project>/scripts/, use that.
+# Otherwise (global install / symlink), use the current working directory.
+_SCRIPT_PARENT="$(cd "$(dirname "$0")/.." && pwd)"
+if [ -f "$_SCRIPT_PARENT/pubspec.yaml" ]; then
+  PROJECT_ROOT="$_SCRIPT_PARENT"
+else
+  PROJECT_ROOT="$(pwd)"
+fi
+unset _SCRIPT_PARENT
+
+if [ ! -f "$PROJECT_ROOT/pubspec.yaml" ]; then
+  echo "❌ No pubspec.yaml found in $PROJECT_ROOT"
+  echo "   Run this command from the root of a Flutter project."
+  exit 1
+fi
 cd "$PROJECT_ROOT"
 
 APP_NAME="$(basename "$PROJECT_ROOT")"
