@@ -1,98 +1,113 @@
 # Flutter Build & Distribute Script
 
-A standardized Bash script to automate Flutter release builds **and distribute** them to Firebase App Distribution, Google Play Store, and App Store (TestFlight) via Fastlane.
+A portable CLI tool to automate Flutter release builds **and distribute** them to Firebase App Distribution, Google Play Store, and App Store (TestFlight) via Fastlane.
+
+Supports **macOS**, **Linux**, and **Windows**.
 
 ## ✨ Features
 
-- **Portable & Reusable**: Automatically derives the app name from the project's root folder name—no hardcoded values, drop-in ready for any Flutter project.
-- **Automated Build Numbering**: Uses Git commit count (`git rev-list --count HEAD`) for unique, strictly increasing build numbers.
-- **Dynamic Semantic Versioning**: Automatically extracts `version` from `pubspec.yaml`.
-- **Pre-flight Safety Check**: Warns and prompts if the Git working tree has uncommitted changes before release builds.
-- **Clean Build Lifecycle**: Purges stale artifacts and re-fetches packages automatically.
-- **Multi-Target Build**: Supports Android App Bundle (`.aab`), APK (`.apk`), and iOS Archive (`.ipa`).
-- **Standardized Artifact Output**: Timestamped filenames in `build/dist/`.
-- **Optional Obfuscation**: `--obfuscate` for Dart symbol obfuscation with debug symbol export.
-- **🆕 Distribution via Fastlane**: Ship to Firebase App Distribution, Google Play, and TestFlight in one command.
-- **🆕 Auto-Bootstrap**: Fastlane config is generated as temp files—no permanent files added to your project.
-- **🆕 Multi-Target Distribution**: Distribute to multiple targets in one run (e.g., `firebase,appstore`).
-- **🆕 Distribute-Only Mode**: Re-upload existing artifacts without rebuilding.
-- **🆕 Dry-Run Mode**: Validate config and build without uploading.
+- **Cross-Platform**: Works on macOS/Linux (Bash) and Windows (PowerShell)
+- **Portable & Reusable**: Derives the app name from the project folder — drop-in ready for any Flutter project
+- **Automated Build Numbering**: Git commit count (`git rev-list --count HEAD`) for unique, increasing build numbers
+- **Dynamic Versioning**: Extracts `version` from `pubspec.yaml` automatically
+- **Pre-flight Safety Check**: Warns on uncommitted changes before release builds
+- **Clean Build Lifecycle**: `flutter clean` + `flutter pub get` before every build
+- **Multi-Target Build**: Android App Bundle (`.aab`), APK (`.apk`), iOS Archive (`.ipa`)
+- **Standardized Output**: Timestamped filenames in `build/dist/`
+- **Optional Obfuscation**: `--obfuscate` for Dart symbol obfuscation
+- **Distribution via Fastlane**: Ship to Firebase, Google Play, and TestFlight in one command
+- **Auto-Bootstrap Fastlane**: Temp config generated on the fly — no files added to your project
+- **Multi-Target Distribution**: e.g., `--distribute firebase,appstore` in one run
+- **Distribute-Only Mode**: Re-upload existing artifacts without rebuilding
+- **Dry-Run Mode**: Validate everything without uploading
 
 ---
 
-## 📦 Installation & Setup
+## 📦 Installation
 
-### Global Install (Recommended)
+### One-Liner (Recommended)
 
-Install once on your machine, use in any Flutter project:
-
+**macOS / Linux:**
 ```bash
-# Symlink to PATH (assumes ~/.local/bin is in PATH)
-ln -sf /path/to/build_script/scripts/build_release.sh ~/.local/bin/build_release
-
-# Verify
-build_release --help
+curl -fsSL https://raw.githubusercontent.com/huyxoann/flutter-build-script/main/setup.sh | bash
 ```
 
-Then just `cd` into any Flutter project and run:
-
-```bash
-build_release                          # Build AAB (default)
-build_release --distribute playstore   # Build & distribute
+**Windows (PowerShell):**
+```powershell
+irm https://raw.githubusercontent.com/huyxoann/flutter-build-script/main/setup.ps1 | iex
 ```
 
-### Per-Project Install (Alternative)
+This clones the repo to `~/.build_script`, installs dependencies (Fastlane, Ruby, Bundler), and adds `build_release` to your PATH.
 
-Copy the script into a specific project's `scripts/` directory:
+### Manual Install (Alternative)
+
+```bash
+git clone https://github.com/huyxoann/flutter-build-script.git ~/.build_script
+~/.build_script/install.sh          # macOS/Linux
+# or
+~/.build_script/install.ps1         # Windows
+```
+
+### Per-Project Install
+
+Copy the script directly into a Flutter project:
 
 ```bash
 mkdir -p scripts
-cp /path/to/build_script/scripts/build_release.sh scripts/
+cp ~/.build_script/scripts/build_release.sh scripts/    # macOS/Linux
 chmod +x scripts/build_release.sh
-./scripts/build_release.sh --help
 ```
 
-Edit `.build_release.env` with your project's credentials:
+### Uninstall
+
+```bash
+~/.build_script/install.sh --uninstall     # macOS/Linux
+~/.build_script/install.ps1 --uninstall    # Windows
+```
+
+### Prerequisites
+
+The installer handles these automatically. If you need to install manually:
+
+| Dependency | macOS/Linux | Windows |
+| :--- | :--- | :--- |
+| Ruby | `brew install ruby` | `choco install ruby` |
+| Fastlane | `brew install fastlane` | `gem install fastlane` |
+| Bundler | Included with Fastlane | `gem install bundler` |
+
+> **macOS/Linux**: Homebrew (`brew`) is required. Install from [brew.sh](https://brew.sh) if needed.
+
+---
+
+## ⚙️ Configuration
+
+### Distribution Config
+
+Create `.build_release.env` at your Flutter project root:
+
+```bash
+cp ~/.build_script/.build_release.env.example .build_release.env
+```
+
+Fill in your credentials:
 
 ```env
-# Firebase
+# === Firebase App Distribution ===
 FIREBASE_APP_ID_ANDROID=1:123456789:android:abcdef
 FIREBASE_APP_ID_IOS=1:123456789:ios:abcdef
 FIREBASE_CLI_TOKEN=your_token_here
 FIREBASE_TESTER_GROUPS=QA,Dev
 
-# Google Play
+# === Google Play Store ===
 GOOGLE_PLAY_JSON_KEY=~/.config/gplay/service-account.json
 
-# App Store Connect
+# === App Store Connect (macOS only) ===
 ASC_KEY_ID=ABC123
 ASC_ISSUER_ID=def-456-ghi
 ASC_KEY_FILE=~/.config/appstore/AuthKey_ABC123.p8
 ```
 
 > **⚠️ Important**: Add `.build_release.env` to your `.gitignore` — it contains secrets!
-
-### Step 3: Install Distribution Dependencies
-
-Only needed if using `--distribute`:
-
-```bash
-# Ruby (usually pre-installed on macOS)
-ruby --version
-
-# Bundler
-gem install bundler
-
-# Fastlane
-gem install fastlane
-# or: brew install fastlane
-```
-
-### Step 4: Verify
-
-```bash
-./scripts/build_release.sh --help
-```
 
 ---
 
@@ -101,46 +116,37 @@ gem install fastlane
 ### Build Only (No Distribution)
 
 ```bash
-# Build Android App Bundle (.aab) — default
-./scripts/build_release.sh
-
-# Build Android APK
-./scripts/build_release.sh apk
-
-# Build iOS IPA
-./scripts/build_release.sh ipa
-
-# Debug APK for local testing
-./scripts/build_release.sh apk --debug
-
-# Build with obfuscation
-./scripts/build_release.sh appbundle --obfuscate
+build_release                         # Android App Bundle (.aab) — default
+build_release apk                     # Android APK
+build_release ipa                     # iOS IPA (macOS only)
+build_release apk --debug             # Debug APK
+build_release appbundle --obfuscate   # With Dart obfuscation
 ```
 
 ### Build & Distribute
 
 ```bash
 # Firebase App Distribution — Android
-./scripts/build_release.sh --distribute firebase --platform android
+build_release --distribute firebase --platform android
 
-# Firebase App Distribution — iOS with custom groups and notes
-./scripts/build_release.sh --distribute firebase --platform ios \
+# Firebase — iOS with custom groups and notes
+build_release --distribute firebase --platform ios \
   --groups "QA,PM" --notes "Bug fix release v1.2"
 
 # Google Play Store — internal track (default)
-./scripts/build_release.sh --distribute playstore
+build_release --distribute playstore
 
 # Google Play Store — beta track
-./scripts/build_release.sh --distribute playstore --track beta
+build_release --distribute playstore --track beta
 
-# App Store (TestFlight)
-./scripts/build_release.sh --distribute appstore
+# App Store / TestFlight (macOS only)
+build_release --distribute appstore
 
 # Multi-target: Firebase + TestFlight (both use IPA)
-./scripts/build_release.sh --distribute firebase,appstore --platform ios
+build_release --distribute firebase,appstore --platform ios
 
 # Dry-run — validate everything, skip upload
-./scripts/build_release.sh --distribute playstore --dry-run
+build_release --distribute playstore --dry-run
 ```
 
 ### Distribute-Only (Skip Build)
@@ -148,11 +154,8 @@ gem install fastlane
 Re-upload the latest artifact from `build/dist/` without rebuilding:
 
 ```bash
-# Re-distribute latest APK to Firebase
-./scripts/build_release.sh --distribute firebase --platform android --distribute-only
-
-# Re-distribute latest IPA to TestFlight
-./scripts/build_release.sh --distribute appstore --distribute-only
+build_release --distribute firebase --platform android --distribute-only
+build_release --distribute appstore --distribute-only
 ```
 
 ---
@@ -163,13 +166,13 @@ Re-upload the latest artifact from `build/dist/` without rebuilding:
 
 | Argument | Category | Description | Default |
 | :--- | :--- | :--- | :--- |
-| `appbundle` | Target | Builds Android App Bundle (`.aab`) | ✅ Yes |
-| `apk` | Target | Builds Android APK (`.apk`) | ❌ No |
-| `ipa` | Target | Builds iOS IPA (`.ipa`) | ❌ No |
+| `appbundle` | Target | Android App Bundle (`.aab`) | ✅ Yes |
+| `apk` | Target | Android APK (`.apk`) | ❌ No |
+| `ipa` | Target | iOS IPA (`.ipa`) — macOS only | ❌ No |
 | `release`, `--release` | Mode | Release build | ✅ Yes |
-| `profile`, `--profile` | Mode | Profile build for performance analysis | ❌ No |
+| `profile`, `--profile` | Mode | Profile build | ❌ No |
 | `debug`, `--debug` | Mode | Debug build | ❌ No |
-| `--obfuscate` | Flag | Enables Dart obfuscation & debug symbol export | ❌ No |
+| `--obfuscate` | Flag | Dart obfuscation & debug symbol export | ❌ No |
 
 ### Distribution Options
 
@@ -180,12 +183,12 @@ Re-upload the latest artifact from `build/dist/` without rebuilding:
 | `--track <track>` | Play Store track: `internal`, `alpha`, `beta`, `production` | `internal` |
 | `--groups <groups>` | Firebase tester groups (comma-separated) | from `.build_release.env` |
 | `--notes <text>` | Firebase release notes | from `.build_release.env` |
-| `--distribute-only` | Skip build, use latest artifact from `build/dist/` | ❌ No |
-| `--dry-run` | Validate and build, but skip actual upload | ❌ No |
+| `--distribute-only` | Skip build, use latest artifact | ❌ No |
+| `--dry-run` | Validate and build, skip upload | ❌ No |
 
 ### Build Target Auto-Inference
 
-When `--distribute` is used without an explicit target, the build target is inferred:
+When `--distribute` is used without an explicit target:
 
 | `--distribute` | `--platform` | Inferred Target |
 | :--- | :--- | :--- |
@@ -194,7 +197,18 @@ When `--distribute` is used without an explicit target, the build target is infe
 | `playstore` | _(implied)_ | `appbundle` |
 | `appstore` | _(implied)_ | `ipa` |
 
-> **Note**: Multi-target distribution only works when all targets use the same artifact type. For example, `firebase,appstore` (both IPA) works, but `firebase,playstore` on Android (APK vs AAB) does not.
+> **Note**: Multi-target only works when all targets share the same artifact type. `firebase,appstore` (both IPA) ✅ — `firebase,playstore` on Android (APK vs AAB) ❌
+
+### Platform Support
+
+| Feature | macOS/Linux | Windows |
+| :--- | :--- | :--- |
+| Build `apk` / `appbundle` | ✅ | ✅ |
+| Build `ipa` | ✅ | ❌ |
+| Distribute `firebase` (Android) | ✅ | ✅ |
+| Distribute `firebase` (iOS) | ✅ | ❌ |
+| Distribute `playstore` | ✅ | ✅ |
+| Distribute `appstore` | ✅ | ❌ |
 
 ---
 
@@ -204,7 +218,7 @@ When `--distribute` is used without an explicit target, the build target is infe
 build/dist/
 ├── <app_name>_v0.1.0_b124_20260825_1030.aab          # Release artifact
 ├── <app_name>_debug_v0.1.0_b124_20260825_1035.apk    # Debug artifact
-├── <app_name>_v0.1.0_b124_20260825_1040.ipa           # iOS artifact
+├── <app_name>_v0.1.0_b124_20260825_1040.ipa           # iOS artifact (macOS only)
 ├── symbols/                                            # (--obfuscate only)
 │   └── symbols_v0.1.0_b124_20260825_1030/
 └── .fastlane/                                          # Auto-generated, cleaned by flutter clean
@@ -215,9 +229,7 @@ build/dist/
         └── Pluginfile
 ```
 
-### 🧹 Automatic Cleanup
-
-Running `flutter clean` wipes the entire `build/` directory, including release artifacts, Fastlane temp files, and cached gems.
+Running `flutter clean` wipes everything in `build/`, including artifacts and Fastlane cache.
 
 ---
 
@@ -248,7 +260,7 @@ Running `flutter clean` wipes the entire `build/` directory, including release a
    GOOGLE_PLAY_JSON_KEY=~/.config/gplay/service-account.json
    ```
 
-### App Store Connect (TestFlight)
+### App Store Connect (TestFlight) — macOS only
 
 1. Go to [App Store Connect](https://appstoreconnect.apple.com/) → Users and Access → Integrations → App Store Connect API
 2. Generate a new API Key with **App Manager** role
@@ -266,12 +278,12 @@ Running `flutter clean` wipes the entire `build/` directory, including release a
 
 ### CI/CD Integration
 
-- Ensure your checkout step fetches the full Git history (`fetch-depth: 0`) for accurate build numbering.
-- In CI, set credentials as environment variables instead of `.build_release.env`.
+- Fetch full Git history (`fetch-depth: 0`) for accurate build numbering.
+- Set credentials as environment variables instead of `.build_release.env`.
 
 ### iOS Signing
 
-The script relies on Xcode automatic signing by default. If you need a specific export method (e.g., ad-hoc for Firebase), set `IOS_EXPORT_OPTIONS_PLIST` in `.build_release.env`:
+The script relies on Xcode automatic signing by default. For a specific export method (e.g., ad-hoc for Firebase), set in `.build_release.env`:
 
 ```env
 IOS_EXPORT_OPTIONS_PLIST=ios/ExportOptions.plist
@@ -279,4 +291,18 @@ IOS_EXPORT_OPTIONS_PLIST=ios/ExportOptions.plist
 
 ### First Run Performance
 
-The first `--distribute` run installs Fastlane gems locally in `build/dist/.fastlane/vendor/`. Subsequent runs reuse the cache (until `flutter clean` is run).
+The first `--distribute` run installs Fastlane gems locally in `build/dist/.fastlane/vendor/`. Subsequent runs reuse the cache (until `flutter clean`).
+
+### Updating
+
+```bash
+cd ~/.build_script && git pull    # macOS/Linux
+
+# or re-run the one-liner:
+curl -fsSL https://raw.githubusercontent.com/huyxoann/flutter-build-script/main/setup.sh | bash
+```
+
+```powershell
+# Windows
+irm https://raw.githubusercontent.com/huyxoann/flutter-build-script/main/setup.ps1 | iex
+```
