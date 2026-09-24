@@ -79,35 +79,32 @@ The installer handles these automatically. If you need to install manually:
 
 ---
 
-## ⚙️ Configuration
+## ⚙️ Configuration & Project Setup
 
-### Distribution Config
+### Quick Setup (Recommended)
 
-Create `.build_release.env` at your Flutter project root:
+In your Flutter project root, run:
 
 ```bash
-cp ~/.build_script/.build_release.env.example .build_release.env
+build_release --setup
 ```
 
-Fill in your credentials:
+This will:
+1. ✅ Create `.build_release.env` (and add it to `.gitignore`)
+2. 🔍 **Auto-detect Firebase App IDs** from `firebase.json` or `google-services.json` / `GoogleService-Info.plist`
+3. 🔍 **Auto-detect Firebase tester groups** via `firebase appdistribution:groups:list`
+4. 🔍 **Auto-detect Google Play JSON key** from `~/.config/gplay/service-account.json`
+5. 🔍 **Auto-detect App Store Connect key** from `~/.config/appstore/AuthKey_*.p8` (and auto-extract Key ID)
 
-```env
-# === Firebase App Distribution ===
-FIREBASE_APP_ID_ANDROID=1:123456789:android:abcdef
-FIREBASE_APP_ID_IOS=1:123456789:ios:abcdef
-FIREBASE_CLI_TOKEN=your_token_here
-FIREBASE_TESTER_GROUPS=QA,Dev
+### Machine Credential Directories
 
-# === Google Play Store ===
-GOOGLE_PLAY_JSON_KEY=~/.config/gplay/service-account.json
+The installer creates these standard directories on your machine:
+* `~/.config/gplay/` — Put your Google Play `service-account.json` here (shared across all projects)
+* `~/.config/appstore/` — Put your App Store Connect `AuthKey_<KEY_ID>.p8` here
 
-# === App Store Connect (macOS only) ===
-ASC_KEY_ID=ABC123
-ASC_ISSUER_ID=def-456-ghi
-ASC_KEY_FILE=~/.config/appstore/AuthKey_ABC123.p8
-```
+When you run `build_release --setup` in any project, it automatically links to these keys!
 
-> **⚠️ Important**: Add `.build_release.env` to your `.gitignore` — it contains secrets!
+> **⚠️ Important**: Never commit `.build_release.env` or credential files to Git!
 
 ---
 

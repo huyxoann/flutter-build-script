@@ -111,5 +111,12 @@ case ":$PATH:" in
     ;;
 esac
 
+# Ensure standard credential directories exist
+mkdir -p "$HOME/.config/gplay" "$HOME/.config/appstore"
+
+echo "📁 Credential directories ready:"
+echo "   - ~/.config/gplay/    (Place Google Play service-account.json here)"
+echo "   - ~/.config/appstore/ (Place App Store Connect AuthKey_*.p8 here)"
+
 echo ""
 echo "🚀 Ready! Run 'build_release --help' from any Flutter project."

@@ -144,8 +144,39 @@ function Detect-FirebaseIds {
     }
 }
 
+function Detect-MachineCredentials {
+    $script:_DetectedGplayKey = ""
+    $script:_DetectedAscKeyFile = ""
+    $script:_DetectedAscKeyId = ""
+
+    $gplayDir = Join-Path $env:USERPROFILE ".config\gplay"
+    $appstoreDir = Join-Path $env:USERPROFILE ".config\appstore"
+
+    if (-not (Test-Path $gplayDir)) { New-Item -ItemType Directory -Path $gplayDir -Force | Out-Null }
+    if (-not (Test-Path $appstoreDir)) { New-Item -ItemType Directory -Path $appstoreDir -Force | Out-Null }
+
+    $saJson = Join-Path $gplayDir "service-account.json"
+    if (Test-Path $saJson) {
+        $script:_DetectedGplayKey = "~/.config/gplay/service-account.json"
+    } else {
+        $firstJson = Get-ChildItem -Path $gplayDir -Filter "*.json" -File -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($firstJson) {
+            $script:_DetectedGplayKey = "~/.config/gplay/$($firstJson.Name)"
+        }
+    }
+
+    $firstP8 = Get-ChildItem -Path $appstoreDir -Filter "*.p8" -File -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($firstP8) {
+        $script:_DetectedAscKeyFile = "~/.config/appstore/$($firstP8.Name)"
+        if ($firstP8.Name -match 'AuthKey_([A-Za-z0-9]+)\.p8') {
+            $script:_DetectedAscKeyId = $Matches[1]
+        }
+    }
+}
+
 function Create-EnvFile {
     Detect-FirebaseIds
+    Detect-MachineCredentials
     $envTemplate = @"
 # ==========================================
 # .build_release.env — Project Build & Distribution Config
@@ -169,13 +200,13 @@ FIREBASE_RELEASE_NOTES=
 # === Google Play Store ===
 # Path to service account JSON key file
 # Create at: Google Cloud Console > IAM > Service Accounts
-GOOGLE_PLAY_JSON_KEY=
+GOOGLE_PLAY_JSON_KEY=$script:_DetectedGplayKey
 
 # === App Store Connect (API Key — macOS only) ===
 # Create at: App Store Connect > Users and Access > Integrations
-ASC_KEY_ID=
+ASC_KEY_ID=$script:_DetectedAscKeyId
 ASC_ISSUER_ID=
-ASC_KEY_FILE=
+ASC_KEY_FILE=$script:_DetectedAscKeyFile
 
 # === iOS Build (Optional) ===
 # Path to ExportOptions.plist for manual signing (omit for Xcode automatic signing)
@@ -188,6 +219,15 @@ ASC_KEY_FILE=
         Write-Host "   🔍 Auto-detected Firebase App IDs:" -ForegroundColor Cyan
         if (-not [string]::IsNullOrEmpty($script:_DetectedAndroidId)) { Write-Host "      Android: $script:_DetectedAndroidId" -ForegroundColor Cyan }
         if (-not [string]::IsNullOrEmpty($script:_DetectedIosId)) { Write-Host "      iOS:     $script:_DetectedIosId" -ForegroundColor Cyan }
+    }
+    if (-not [string]::IsNullOrEmpty($script:_DetectedGplayKey)) {
+        Write-Host "   🔍 Auto-detected Google Play key: $script:_DetectedGplayKey" -ForegroundColor Cyan
+    }
+    if (-not [string]::IsNullOrEmpty($script:_DetectedAscKeyFile)) {
+        Write-Host "   🔍 Auto-detected App Store key: $script:_DetectedAscKeyFile" -ForegroundColor Cyan
+        if (-not [string]::IsNullOrEmpty($script:_DetectedAscKeyId)) {
+            Write-Host "      Key ID: $script:_DetectedAscKeyId" -ForegroundColor Cyan
+        }
     }
 }
 

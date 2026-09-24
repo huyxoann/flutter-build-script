@@ -258,9 +258,45 @@ except: pass
 " 2>/dev/null)
 }
 
+detect_machine_credentials() {
+  _DETECTED_GPLAY_KEY=""
+  _DETECTED_ASC_KEY_FILE=""
+  _DETECTED_ASC_KEY_ID=""
+
+  local gplay_dir="$HOME/.config/gplay"
+  local appstore_dir="$HOME/.config/appstore"
+
+  # Ensure machine credential folders exist
+  mkdir -p "$gplay_dir" "$appstore_dir"
+
+  # 1. Google Play JSON key
+  if [ -f "$gplay_dir/service-account.json" ]; then
+    _DETECTED_GPLAY_KEY="~/.config/gplay/service-account.json"
+  else
+    local first_json
+    first_json=$(find "$gplay_dir" -maxdepth 1 -name "*.json" 2>/dev/null | head -1)
+    if [ -n "$first_json" ]; then
+      _DETECTED_GPLAY_KEY="~/.config/gplay/$(basename "$first_json")"
+    fi
+  fi
+
+  # 2. App Store Connect .p8 key
+  local first_p8
+  first_p8=$(find "$appstore_dir" -maxdepth 1 -name "*.p8" 2>/dev/null | head -1)
+  if [ -n "$first_p8" ]; then
+    local p8_name
+    p8_name=$(basename "$first_p8")
+    _DETECTED_ASC_KEY_FILE="~/.config/appstore/$p8_name"
+    if [[ "$p8_name" =~ AuthKey_([A-Za-z0-9]+)\.p8 ]]; then
+      _DETECTED_ASC_KEY_ID="${BASH_REMATCH[1]}"
+    fi
+  fi
+}
+
 create_env_file() {
   detect_firebase_ids
   detect_firebase_groups
+  detect_machine_credentials
 
   local tester_groups="${_DETECTED_TESTER_GROUPS:-testers}"
 
@@ -287,13 +323,13 @@ FIREBASE_RELEASE_NOTES=
 # === Google Play Store ===
 # Path to service account JSON key file
 # Create at: Google Cloud Console > IAM > Service Accounts
-GOOGLE_PLAY_JSON_KEY=
+GOOGLE_PLAY_JSON_KEY=$_DETECTED_GPLAY_KEY
 
 # === App Store Connect (API Key — macOS only) ===
 # Create at: App Store Connect > Users and Access > Integrations
-ASC_KEY_ID=
+ASC_KEY_ID=$_DETECTED_ASC_KEY_ID
 ASC_ISSUER_ID=
-ASC_KEY_FILE=
+ASC_KEY_FILE=$_DETECTED_ASC_KEY_FILE
 
 # === iOS Build (Optional) ===
 # Path to ExportOptions.plist for manual signing (omit for Xcode automatic signing)
@@ -308,6 +344,13 @@ ENV_TEMPLATE
   fi
   if [ -n "$_DETECTED_TESTER_GROUPS" ]; then
     echo "   🔍 Auto-detected tester groups: $_DETECTED_TESTER_GROUPS"
+  fi
+  if [ -n "$_DETECTED_GPLAY_KEY" ]; then
+    echo "   🔍 Auto-detected Google Play key: $_DETECTED_GPLAY_KEY"
+  fi
+  if [ -n "$_DETECTED_ASC_KEY_FILE" ]; then
+    echo "   🔍 Auto-detected App Store key: $_DETECTED_ASC_KEY_FILE"
+    [ -n "$_DETECTED_ASC_KEY_ID" ] && echo "      Key ID: $_DETECTED_ASC_KEY_ID"
   fi
 }
 
