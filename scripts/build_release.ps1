@@ -76,6 +76,87 @@ if (Test-Path ".build_release.env") {
 }
 
 # ==========================================
+# PROJECT SETUP
+# ==========================================
+function Run-Setup {
+    Write-Host "⚙️  Setting up project for build_release..." -ForegroundColor Cyan
+    Write-Host ""
+
+    # --- .build_release.env ---
+    if (Test-Path ".build_release.env") {
+        Write-Host "⚠️  .build_release.env already exists." -ForegroundColor Yellow
+        $ans = Read-Host "Overwrite? (y/N)"
+        if ($ans -notmatch "^[Yy]$") {
+            Write-Host "   Skipped .build_release.env"
+        } else {
+            Create-EnvFile
+        }
+    } else {
+        Create-EnvFile
+    }
+
+    # --- .gitignore ---
+    if (Test-Path ".gitignore") {
+        $gitignore = Get-Content ".gitignore"
+        if ($gitignore -notcontains ".build_release.env") {
+            Add-Content ".gitignore" "`n# Build release config (contains secrets)`n.build_release.env"
+            Write-Host "✅ Added .build_release.env to .gitignore" -ForegroundColor Green
+        } else {
+            Write-Host "ℹ️  .build_release.env already in .gitignore" -ForegroundColor Cyan
+        }
+    } else {
+        Set-Content ".gitignore" "# Build release config (contains secrets)`n.build_release.env"
+        Write-Host "✅ Created .gitignore with .build_release.env" -ForegroundColor Green
+    }
+
+    Write-Host ""
+    Write-Host "🚀 Setup complete! Next steps:" -ForegroundColor Cyan
+    Write-Host "   1. Edit .build_release.env with your credentials"
+    Write-Host "   2. Run: .\build_release.ps1 --distribute firebase --platform android"
+    exit 0
+}
+
+function Create-EnvFile {
+    $envTemplate = @"
+# ==========================================
+# .build_release.env — Project Build & Distribution Config
+# ==========================================
+# ⚠️  Do NOT commit this file — it contains secrets!
+
+# === Firebase App Distribution ===
+# App IDs from Firebase Console > Project Settings > General > Your apps
+FIREBASE_APP_ID_ANDROID=
+FIREBASE_APP_ID_IOS=
+
+# Firebase CLI token (generate with: firebase login:ci)
+FIREBASE_CLI_TOKEN=
+
+# Default tester groups (comma-separated, can override with --groups)
+FIREBASE_TESTER_GROUPS=
+
+# Default release notes (can override with --notes)
+FIREBASE_RELEASE_NOTES=
+
+# === Google Play Store ===
+# Path to service account JSON key file
+# Create at: Google Cloud Console > IAM > Service Accounts
+GOOGLE_PLAY_JSON_KEY=
+
+# === App Store Connect (API Key — macOS only) ===
+# Create at: App Store Connect > Users and Access > Integrations
+ASC_KEY_ID=
+ASC_ISSUER_ID=
+ASC_KEY_FILE=
+
+# === iOS Build (Optional) ===
+# Path to ExportOptions.plist for manual signing (omit for Xcode automatic signing)
+# IOS_EXPORT_OPTIONS_PLIST=ios/ExportOptions.plist
+"@
+    Set-Content -Path ".build_release.env" -Value $envTemplate -Encoding UTF8
+    Write-Host "✅ Created .build_release.env" -ForegroundColor Green
+}
+
+# ==========================================
 # HELP
 # ==========================================
 function Show-Help {
@@ -102,6 +183,7 @@ Distribution:
   --dry-run                Validate config and build, but skip actual upload
 
 Options:
+  --setup                  Setup project credentials and .build_release.env
   --obfuscate              Enable Dart symbol obfuscation (release/profile only)
   --help, -h               Show this help message
 
@@ -185,6 +267,9 @@ while ($i -lt $args.Count) {
         }
         "^--dry-run$" {
             $DRY_RUN = $true; $i++; break
+        }
+        "^--setup$" {
+            Run-Setup
         }
         "^(-h|--help)$" {
             Show-Help
