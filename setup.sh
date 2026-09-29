@@ -14,6 +14,7 @@ echo ""
 
 if [ -d "$INSTALL_DIR/.git" ]; then
   echo "📥 Updating existing installation..."
+  git -C "$INSTALL_DIR" reset --hard HEAD --quiet
   git -C "$INSTALL_DIR" pull --quiet
 else
   echo "📥 Cloning to $INSTALL_DIR..."
