@@ -334,6 +334,155 @@ detect_machine_credentials() {
   fi
 }
 
+# ==========================================
+# IOS SIGNING & EXPORT OPTIONS RESOLUTION
+# ==========================================
+# ponytail: regex-based pbxproj parsing covers standard Flutter Xcode projects;
+# full PBX parser needed only if projects use complex multi-project schemes.
+resolve_ios_export_options() {
+  # 1. Explicitly configured in .build_release.env
+  if [ -n "$IOS_EXPORT_OPTIONS_PLIST" ] && [ -f "$IOS_EXPORT_OPTIONS_PLIST" ]; then
+    echo "$IOS_EXPORT_OPTIONS_PLIST"
+    return 0
+  fi
+
+  # 2. Existing file in ios/ directory
+  if [ -f "ios/ExportOptions.plist" ]; then
+    echo "ios/ExportOptions.plist"
+    return 0
+  fi
+
+  # 3. Auto-generate based on project.pbxproj and local provisioning profiles
+  if command -v python3 &>/dev/null && [ -f "ios/Runner.xcodeproj/project.pbxproj" ]; then
+    local gen_dir="$BUILD_DIR"
+    mkdir -p "$gen_dir"
+    local gen_plist="$gen_dir/ExportOptions.generated.plist"
+
+    local py_success
+    py_success=$(python3 -c "
+import os, sys, re, glob, plistlib, subprocess
+
+build_mode = '$BUILD_MODE'
+pbx_path = 'ios/Runner.xcodeproj/project.pbxproj'
+gen_plist = '$gen_plist'
+
+try:
+    with open(pbx_path, 'r', encoding='utf-8') as f:
+        content = f.read()
+
+    # Find native targets (excluding test targets)
+    target_blocks = re.findall(r'/\* ([^*]+) \*/ = \{[^\}]+isa = PBXNativeTarget;[^\}]+buildConfigurationList = ([0-9A-Fa-f]+)', content)
+    targets_info = []
+
+    for target_name, config_list_id in target_blocks:
+        if 'test' in target_name.lower():
+            continue
+        list_match = re.search(config_list_id + r' [^\=]+ = \{[^\}]+buildConfigurations = \(([^;]+)\);', content)
+        if not list_match:
+            continue
+        configs = re.findall(r'([0-9A-Fa-f]+) /\* (Debug|Release|Profile) \*/', list_match.group(1))
+        for cfg_id, cfg_name in configs:
+            if cfg_name.lower() == build_mode.lower():
+                cfg_block = re.search(cfg_id + r' /\* [^*]+ \*/ = \{[^\}]+buildSettings = \{([^;\}]+(?:;[^;\}]+)*)\};', content)
+                if cfg_block:
+                    settings = cfg_block.group(1)
+                    teams = [m.strip(' \"') for m in re.findall(r'(?:DEVELOPMENT_TEAM|\"DEVELOPMENT_TEAM[^\"]*\")\s*=\s*([^;]+);', settings) if m.strip(' \"')]
+                    bundles = [m.strip(' \"') for m in re.findall(r'PRODUCT_BUNDLE_IDENTIFIER\s*=\s*([^;]+);', settings) if m.strip(' \"')]
+                    profs = [m.strip(' \"') for m in re.findall(r'(?:PROVISIONING_PROFILE_SPECIFIER|\"PROVISIONING_PROFILE_SPECIFIER[^\"]*\")\s*=\s*([^;]+);', settings) if m.strip(' \"')]
+                    styles = [m.strip(' \"') for m in re.findall(r'CODE_SIGN_STYLE\s*=\s*([^;]+);', settings) if m.strip(' \"')]
+                    targets_info.append({
+                        'target': target_name,
+                        'team': teams[0] if teams else '',
+                        'bundle': bundles[0] if bundles else '',
+                        'profile': profs[0] if profs else '',
+                        'style': styles[0] if styles else 'Automatic'
+                    })
+
+    if not targets_info:
+        sys.exit(1)
+
+    runner_target = next((t for t in targets_info if t['target'] == 'Runner'), targets_info[0])
+    target_prof = runner_target.get('profile', '')
+    target_bundle = runner_target.get('bundle', '')
+    target_team = runner_target.get('team', '')
+
+    method = 'app-store'
+    matched_profile_name = target_prof
+
+    profile_dirs = [
+        os.path.expanduser('~/Library/Developer/Xcode/UserData/Provisioning Profiles'),
+        os.path.expanduser('~/Library/MobileDevice/Provisioning Profiles')
+    ]
+
+    for pdir in profile_dirs:
+        if not os.path.isdir(pdir):
+            continue
+        for f in glob.glob(os.path.join(pdir, '*.mobileprovision')):
+            try:
+                res = subprocess.run(['security', 'cms', '-D', '-i', f], capture_output=True, check=True)
+                p = plistlib.loads(res.stdout)
+                name = p.get('Name', '')
+                uuid = p.get('UUID', '')
+                app_id = p.get('Entitlements', {}).get('application-identifier', '')
+                team_ids = p.get('TeamIdentifier', [])
+
+                is_match = False
+                if target_prof and (name == target_prof or uuid == target_prof):
+                    is_match = True
+                elif not target_prof and target_bundle and target_bundle in app_id and (not target_team or target_team in team_ids):
+                    is_match = True
+                    matched_profile_name = name
+
+                if is_match:
+                    if p.get('ProvisionsAllDevices'):
+                        method = 'enterprise'
+                    elif p.get('ProvisionedDevices'):
+                        if p.get('Entitlements', {}).get('get-task-allow'):
+                            method = 'development'
+                        else:
+                            method = 'ad-hoc'
+                    else:
+                        method = 'app-store'
+                    break
+            except Exception:
+                pass
+        if matched_profile_name and matched_profile_name != target_prof:
+            break
+
+    plist_data = {
+        'method': method,
+        'signingStyle': runner_target.get('style', 'Automatic').lower()
+    }
+    if target_team:
+        plist_data['teamID'] = target_team
+
+    if plist_data['signingStyle'] == 'manual':
+        prof_map = {}
+        for t in targets_info:
+            b = t.get('bundle')
+            p = t.get('profile') or matched_profile_name
+            if b and p:
+                prof_map[b] = p
+        if prof_map:
+            plist_data['provisioningProfiles'] = prof_map
+            plist_data['signingCertificate'] = 'Apple Development' if method == 'development' else 'Apple Distribution'
+
+    with open(gen_plist, 'wb') as pf:
+        plistlib.dump(plist_data, pf)
+    print('OK')
+except Exception:
+    sys.exit(1)
+" 2>/dev/null)
+
+    if [ "$py_success" = "OK" ] && [ -f "$gen_plist" ]; then
+      echo "$gen_plist"
+      return 0
+    fi
+  fi
+
+  return 1
+}
+
 create_env_file() {
   detect_firebase_ids
   detect_firebase_groups
@@ -1047,21 +1196,24 @@ if [ "$DISTRIBUTE_ONLY" = false ]; then
       ;;
     "ipa")
       IPA_BUILD_ARGS=("${COMMON_ARGS[@]}")
-      if [ -n "$IOS_EXPORT_OPTIONS_PLIST" ] && [ -f "$IOS_EXPORT_OPTIONS_PLIST" ]; then
-        IPA_BUILD_ARGS+=("--export-options-plist=$IOS_EXPORT_OPTIONS_PLIST")
-        echo "📋 Using export options: $IOS_EXPORT_OPTIONS_PLIST"
+      RESOLVED_EXPORT_PLIST=$(resolve_ios_export_options 2>/dev/null || true)
+      if [ -n "$RESOLVED_EXPORT_PLIST" ] && [ -f "$RESOLVED_EXPORT_PLIST" ]; then
+        IPA_BUILD_ARGS+=("--export-options-plist=$RESOLVED_EXPORT_PLIST")
+        echo "📋 Using export options: $RESOLVED_EXPORT_PLIST"
       fi
       flutter build ipa "${IPA_BUILD_ARGS[@]}"
       IPA_FILE=$(ls build/ios/ipa/*.ipa 2>/dev/null | head -n 1 || true)
       if [ -n "$IPA_FILE" ] && [ -f "$IPA_FILE" ]; then
         cp "$IPA_FILE" "$DEST_FILE"
       else
-        echo "⚠️  No .ipa found in build/ios/ipa/."
-        if [ "$HAS_DISTRIBUTE" = true ]; then
-          echo "❌ Cannot distribute without .ipa artifact. Check Xcode signing config."
-          exit 1
+        echo "❌ Error: Could not find generated .ipa file in build/ios/ipa/."
+        ARCHIVE_PATH=$(ls -d build/ios/archive/*.xcarchive 2>/dev/null | head -n 1 || true)
+        if [ -n "$ARCHIVE_PATH" ] && [ -d "$ARCHIVE_PATH" ]; then
+          echo "   Xcode archive was created at: $ARCHIVE_PATH"
+          echo "   You can inspect or export it manually using:"
+          echo "     open \"$ARCHIVE_PATH\""
         fi
-        echo "   If archive was generated, check build/ios/archive/."
+        exit 1
       fi
       ;;
   esac
