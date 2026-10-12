@@ -2,6 +2,8 @@
 # Remote installer — PowerShell one-liner entry point
 # ==========================================
 # irm https://raw.githubusercontent.com/inhvn/flutter-build-script/main/setup.ps1 | iex
+# Or if repository is private (via GitHub CLI):
+# $token = (gh auth token).Trim(); irm https://raw.githubusercontent.com/inhvn/flutter-build-script/main/setup.ps1 -Headers @{ Authorization = "token $token" } | iex
 
 $ErrorActionPreference = 'Stop'
 

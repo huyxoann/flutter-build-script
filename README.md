@@ -27,6 +27,9 @@ Supports **macOS**, **Linux**, and **Windows**.
 
 ### One-Liner (Recommended)
 
+#### Option 1: Public Repository
+If the repository is public:
+
 **macOS / Linux:**
 ```bash
 curl -fsSL https://raw.githubusercontent.com/inhvn/flutter-build-script/main/setup.sh | bash
@@ -36,6 +39,20 @@ curl -fsSL https://raw.githubusercontent.com/inhvn/flutter-build-script/main/set
 ```powershell
 irm https://raw.githubusercontent.com/inhvn/flutter-build-script/main/setup.ps1 | iex
 ```
+
+#### Option 2: Private Repository (via GitHub CLI `gh`)
+If the repository is private (or to resolve `curl: (56) 404 Not Found`), authenticate with GitHub CLI:
+
+**macOS / Linux:**
+```bash
+curl -fsSL -H "Authorization: token $(gh auth token)" https://raw.githubusercontent.com/inhvn/flutter-build-script/main/setup.sh | bash
+```
+
+**Windows (PowerShell):**
+```powershell
+$token = (gh auth token).Trim(); irm https://raw.githubusercontent.com/inhvn/flutter-build-script/main/setup.ps1 -Headers @{ Authorization = "token $token" } | iex
+```
+
 
 This clones the repo to `~/.build_script`, installs dependencies (Fastlane, Ruby, Bundler), and adds `build_release` to your PATH.
 
@@ -298,11 +315,17 @@ The first `--distribute` run installs Fastlane gems locally in `build/dist/.fast
 ```bash
 cd ~/.build_script && git pull    # macOS/Linux
 
-# or re-run the one-liner:
+# or re-run the one-liner (Public Repo):
 curl -fsSL https://raw.githubusercontent.com/inhvn/flutter-build-script/main/setup.sh | bash
+
+# or re-run with GitHub CLI auth (Private Repo):
+curl -fsSL -H "Authorization: token $(gh auth token)" https://raw.githubusercontent.com/inhvn/flutter-build-script/main/setup.sh | bash
 ```
 
 ```powershell
-# Windows
+# Windows (Public Repo)
 irm https://raw.githubusercontent.com/inhvn/flutter-build-script/main/setup.ps1 | iex
+
+# Windows (Private Repo via gh)
+$token = (gh auth token).Trim(); irm https://raw.githubusercontent.com/inhvn/flutter-build-script/main/setup.ps1 -Headers @{ Authorization = "token $token" } | iex
 ```

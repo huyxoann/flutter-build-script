@@ -5,6 +5,8 @@ set -e
 # Remote installer — curl one-liner entry point
 # ==========================================
 # curl -fsSL https://raw.githubusercontent.com/inhvn/flutter-build-script/main/setup.sh | bash
+# Or if repository is private (via GitHub CLI):
+# curl -fsSL -H "Authorization: token $(gh auth token)" https://raw.githubusercontent.com/inhvn/flutter-build-script/main/setup.sh | bash
 
 INSTALL_DIR="$HOME/.build_script"
 REPO_URL="https://github.com/inhvn/flutter-build-script.git"
