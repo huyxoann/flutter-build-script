@@ -170,6 +170,8 @@ build_release --distribute appstore --distribute-only
 | `profile`, `--profile` | Mode | Profile build | ❌ No |
 | `debug`, `--debug` | Mode | Debug build | ❌ No |
 | `--obfuscate` | Flag | Dart obfuscation & debug symbol export | ❌ No |
+| `--build-number <num>`, `-b <num>` | Option | Explicit build number (overrides auto-detection) | _(none)_ |
+| `--skip-store-version` | Flag | Skip querying Google Play / App Store for latest build number | ❌ No |
 
 ### Distribution Options
 

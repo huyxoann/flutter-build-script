@@ -43,6 +43,7 @@ $DIST_GROUPS = ""
 $DIST_NOTES = ""
 $DISTRIBUTE_ONLY = $false
 $DRY_RUN = $false
+$BUILD_NUMBER_OVERRIDE = ""
 
 # Config defaults (overridden by .build_release.env)
 $FIREBASE_APP_ID_ANDROID = ""
@@ -394,6 +395,12 @@ while ($i -lt $args.Count) {
         }
         "^--dry-run$" {
             $DRY_RUN = $true; $i++; break
+        }
+        "^(--build-number|-b)$" {
+            if ($i + 1 -lt $args.Count) { $BUILD_NUMBER_OVERRIDE = $args[$i+1]; $i += 2 } else { Write-Host "❌ Missing value for --build-number" -ForegroundColor Red; exit 1 }; break
+        }
+        "^--build-number=(.*)$" {
+            $BUILD_NUMBER_OVERRIDE = $Matches[1]; $i++; break
         }
         "^--setup$" {
             Run-Setup
@@ -824,8 +831,25 @@ try {
         }
     }
     
-    $BUILD_NUMBER = (git rev-list --count HEAD 2>$null)
-    if ([string]::IsNullOrWhiteSpace($BUILD_NUMBER)) { $BUILD_NUMBER = "1" }
+    if (-not [string]::IsNullOrWhiteSpace($BUILD_NUMBER_OVERRIDE)) {
+        $BUILD_NUMBER = $BUILD_NUMBER_OVERRIDE
+    } else {
+        $pubspecBuild = ""
+        foreach ($line in $pubspec) {
+            if ($line -match "^version:\s*.*?\+(.*)") {
+                $pubspecBuild = $Matches[1].Trim(" `"'")
+                break
+            }
+        }
+        $gitCount = (git rev-list --count HEAD 2>$null)
+        if ([string]::IsNullOrWhiteSpace($gitCount)) { $gitCount = "1" }
+
+        if (-not [string]::IsNullOrWhiteSpace($pubspecBuild) -and [int]::TryParse($pubspecBuild, [ref]$null) -and [int]$pubspecBuild -gt [int]$gitCount) {
+            $BUILD_NUMBER = $pubspecBuild
+        } else {
+            $BUILD_NUMBER = $gitCount
+        }
+    }
     
     $DATE_TAG = Get-Date -Format "yyyyMMdd_HHmm"
 

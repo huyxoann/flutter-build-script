@@ -45,6 +45,9 @@ DIST_GROUPS=""
 DIST_NOTES=""
 DISTRIBUTE_ONLY=false
 DRY_RUN=false
+BUILD_NUMBER_OVERRIDE=""
+SKIP_STORE_VERSION=false
+BUILD_NUMBER_INFO=""
 
 # Config defaults (overridden by .build_release.env)
 FIREBASE_APP_ID_ANDROID=""
@@ -95,9 +98,11 @@ Distribution:
   --dry-run                Validate config and build, but skip actual upload
 
 Options:
-  --setup                  Initialize .build_release.env and .gitignore in current project
-  --obfuscate              Enable Dart symbol obfuscation (release/profile only)
-  --help, -h               Show this help message
+  --build-number <num>, -b <num>  Set build number manually (overrides auto-detection)
+  --skip-store-version            Skip checking Google Play / App Store for latest build number
+  --setup                         Initialize .build_release.env and .gitignore in current project
+  --obfuscate                     Enable Dart symbol obfuscation (release/profile only)
+  --help, -h                      Show this help message
 
 Examples:
   # Build Android App Bundle (default, no distribution)
@@ -594,6 +599,12 @@ while [[ $# -gt 0 ]]; do
       DISTRIBUTE_ONLY=true; shift ;;
     --dry-run)
       DRY_RUN=true; shift ;;
+    --build-number|-b)
+      BUILD_NUMBER_OVERRIDE="$2"; shift 2 ;;
+    --build-number=*)
+      BUILD_NUMBER_OVERRIDE="${1#*=}"; shift ;;
+    --skip-store-version|--no-store-version)
+      SKIP_STORE_VERSION=true; shift ;;
     --setup)
       run_setup ;;
     --help|-h)
@@ -1024,6 +1035,156 @@ distribute_to_appstore() {
 }
 
 # ==========================================
+# BUILD NUMBER RESOLUTION (Store-driven with fallback)
+# ==========================================
+resolve_build_number() {
+  # 1. Manual override via CLI option (--build-number <num>)
+  if [ -n "$BUILD_NUMBER_OVERRIDE" ]; then
+    BUILD_NUMBER="$BUILD_NUMBER_OVERRIDE"
+    BUILD_NUMBER_INFO="(Manual override: --build-number)"
+    return 0
+  fi
+
+  local detected_store_build=0
+
+  # 2. Store-driven detection (Cách 1)
+  if [ "$SKIP_STORE_VERSION" = false ]; then
+    # Android (appbundle or apk)
+    if [[ "$TARGET" == "appbundle" || "$TARGET" == "apk" ]]; then
+      local resolved_gplay_key=""
+      if [ -z "$GOOGLE_PLAY_JSON_KEY" ] || [ -z "$ANDROID_PACKAGE_NAME" ]; then
+        detect_machine_credentials
+        detect_android_package_name
+        [ -z "$GOOGLE_PLAY_JSON_KEY" ] && GOOGLE_PLAY_JSON_KEY="$_DETECTED_GPLAY_KEY"
+        [ -z "$ANDROID_PACKAGE_NAME" ] && ANDROID_PACKAGE_NAME="$_DETECTED_ANDROID_PACKAGE"
+      fi
+
+      if [ -n "$GOOGLE_PLAY_JSON_KEY" ]; then
+        resolved_gplay_key="$(eval echo "$GOOGLE_PLAY_JSON_KEY")"
+      fi
+
+      if [ -n "$ANDROID_PACKAGE_NAME" ] && [ -n "$resolved_gplay_key" ] && [ -f "$resolved_gplay_key" ] && command -v fastlane &>/dev/null; then
+        echo "🔍 Checking latest version code from Google Play Console..."
+        local tmp_fastlane_dir
+        tmp_fastlane_dir="$(mktemp -d 2>/dev/null || mktemp -d -t 'fastlane')"
+        mkdir -p "$tmp_fastlane_dir/fastlane"
+        local out_file="$tmp_fastlane_dir/version_code.txt"
+
+        cat << FASTLANE_CFG > "$tmp_fastlane_dir/fastlane/Fastfile"
+default_platform(:android)
+platform :android do
+  lane :get_version do
+    begin
+      codes = google_play_track_version_codes(
+        package_name: "$ANDROID_PACKAGE_NAME",
+        json_key: "$resolved_gplay_key"
+      )
+      max_code = (codes || []).map(&:to_i).max || 0
+      File.write("$out_file", max_code.to_s)
+    rescue => e
+      File.write("$out_file", "0")
+    end
+  end
+end
+FASTLANE_CFG
+
+        (cd "$tmp_fastlane_dir" && CI=1 FASTLANE_SKIP_UPDATE_CHECK=1 FASTLANE_OPT_OUT_USAGE=1 fastlane android get_version >/dev/null 2>&1) || true
+        if [ -f "$out_file" ]; then
+          local gplay_code
+          gplay_code=$(cat "$out_file" 2>/dev/null | tr -d ' \n')
+          if [[ "$gplay_code" =~ ^[0-9]+$ ]] && [ "$gplay_code" -gt 0 ]; then
+            detected_store_build=$gplay_code
+            BUILD_NUMBER=$((detected_store_build + 1))
+            BUILD_NUMBER_INFO="(Auto-detected: Google Play max $detected_store_build + 1)"
+            rm -rf "$tmp_fastlane_dir"
+            return 0
+          fi
+        fi
+        rm -rf "$tmp_fastlane_dir"
+      fi
+    fi
+
+    # iOS (ipa)
+    if [ "$TARGET" == "ipa" ]; then
+      if [ -z "$ASC_KEY_FILE" ] || [ -z "$ASC_KEY_ID" ]; then
+        detect_machine_credentials
+        [ -z "$ASC_KEY_FILE" ] && ASC_KEY_FILE="$_DETECTED_ASC_KEY_FILE"
+        [ -z "$ASC_KEY_ID" ] && ASC_KEY_ID="$_DETECTED_ASC_KEY_ID"
+      fi
+
+      local resolved_asc_key=""
+      if [ -n "$ASC_KEY_FILE" ]; then
+        resolved_asc_key="$(eval echo "$ASC_KEY_FILE")"
+      fi
+
+      local ios_bundle_id=""
+      if [ -f "ios/Runner.xcodeproj/project.pbxproj" ]; then
+        ios_bundle_id=$(sed -n -E 's/^[[:space:]]*PRODUCT_BUNDLE_IDENTIFIER[[:space:]=]+([^;]+);.*/\1/p' "ios/Runner.xcodeproj/project.pbxproj" | head -1 | tr -d ' "')
+      fi
+
+      if [ -n "$ASC_KEY_ID" ] && [ -n "$ASC_ISSUER_ID" ] && [ -n "$resolved_asc_key" ] && [ -f "$resolved_asc_key" ] && [ -n "$ios_bundle_id" ] && command -v fastlane &>/dev/null; then
+        echo "🔍 Checking latest build number from App Store Connect (TestFlight)..."
+        local tmp_fastlane_dir
+        tmp_fastlane_dir="$(mktemp -d 2>/dev/null || mktemp -d -t 'fastlane')"
+        mkdir -p "$tmp_fastlane_dir/fastlane"
+        local out_file="$tmp_fastlane_dir/build_number.txt"
+
+        cat << FASTLANE_CFG > "$tmp_fastlane_dir/fastlane/Fastfile"
+default_platform(:ios)
+platform :ios do
+  lane :get_version do
+    begin
+      api_key = app_store_connect_api_key(
+        key_id: "$ASC_KEY_ID",
+        issuer_id: "$ASC_ISSUER_ID",
+        key_filepath: "$resolved_asc_key"
+      )
+      latest_build = latest_testflight_build_number(
+        api_key: api_key,
+        app_identifier: "$ios_bundle_id",
+        initial_build_number: 0
+      )
+      File.write("$out_file", latest_build.to_s)
+    rescue => e
+      File.write("$out_file", "0")
+    end
+  end
+end
+FASTLANE_CFG
+
+        (cd "$tmp_fastlane_dir" && CI=1 FASTLANE_SKIP_UPDATE_CHECK=1 FASTLANE_OPT_OUT_USAGE=1 fastlane ios get_version >/dev/null 2>&1) || true
+        if [ -f "$out_file" ]; then
+          local appstore_code
+          appstore_code=$(cat "$out_file" 2>/dev/null | tr -d ' \n')
+          if [[ "$appstore_code" =~ ^[0-9]+$ ]] && [ "$appstore_code" -gt 0 ]; then
+            detected_store_build=$appstore_code
+            BUILD_NUMBER=$((detected_store_build + 1))
+            BUILD_NUMBER_INFO="(Auto-detected: TestFlight max $detected_store_build + 1)"
+            rm -rf "$tmp_fastlane_dir"
+            return 0
+          fi
+        fi
+        rm -rf "$tmp_fastlane_dir"
+      fi
+    fi
+  fi
+
+  # 3. Fallback: pubspec.yaml build number or Git commit count
+  local pubspec_build
+  pubspec_build=$(grep '^version:' pubspec.yaml | sed 's/version: //' | cut -d '+' -f 2 | tr -d ' "')
+  local git_count
+  git_count=$(git rev-list --count HEAD 2>/dev/null || echo "1")
+
+  if [[ "$pubspec_build" =~ ^[0-9]+$ ]] && [ "$pubspec_build" -gt "$git_count" ]; then
+    BUILD_NUMBER="$pubspec_build"
+    BUILD_NUMBER_INFO="(Fallback: pubspec.yaml build number)"
+  else
+    BUILD_NUMBER="$git_count"
+    BUILD_NUMBER_INFO="(Fallback: Git commit count)"
+  fi
+}
+
+# ==========================================
 # STEP COUNTER
 # ==========================================
 if [ "$DISTRIBUTE_ONLY" = true ]; then
@@ -1083,10 +1244,10 @@ fi
 
 # Version & build info
 VERSION_NAME=$(grep '^version:' pubspec.yaml | sed 's/version: //' | cut -d '+' -f 1 | tr -d ' "')
-BUILD_NUMBER=$(git rev-list --count HEAD 2>/dev/null || echo "1")
+resolve_build_number
 DATE_TAG=$(date +"%Y%m%d_%H%M")
 
-echo "📌 Version       : $VERSION_NAME+$BUILD_NUMBER"
+echo "📌 Version       : $VERSION_NAME+$BUILD_NUMBER $BUILD_NUMBER_INFO"
 echo "📌 Timestamp     : $DATE_TAG"
 echo "📌 Build Mode    : $BUILD_MODE"
 echo "📌 Target        : $TARGET"
