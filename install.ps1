@@ -120,12 +120,15 @@ if (-not $alreadyInPath) {
 # Ensure standard credential directories exist
 $gplayDir = Join-Path $env:USERPROFILE ".config\gplay"
 $appstoreDir = Join-Path $env:USERPROFILE ".config\appstore"
+$slackDir = Join-Path $env:USERPROFILE ".config\slack"
 if (-not (Test-Path $gplayDir)) { New-Item -ItemType Directory -Path $gplayDir -Force | Out-Null }
 if (-not (Test-Path $appstoreDir)) { New-Item -ItemType Directory -Path $appstoreDir -Force | Out-Null }
+if (-not (Test-Path $slackDir)) { New-Item -ItemType Directory -Path $slackDir -Force | Out-Null }
 
 Write-Host "📁 Credential directories ready:" -ForegroundColor Cyan
 Write-Host "   - $gplayDir\    (Place Google Play service-account.json here)"
 Write-Host "   - $appstoreDir\ (Place App Store Connect AuthKey_*.p8 here)"
+Write-Host "   - $slackDir\    (Place webhook_url file here for global Slack notifications)"
 
 Write-Host ""
 Write-Host "🚀 Ready! Run 'build_release --help' from any Flutter project."

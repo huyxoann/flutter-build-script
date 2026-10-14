@@ -44,6 +44,9 @@ $DIST_NOTES = ""
 $DISTRIBUTE_ONLY = $false
 $DRY_RUN = $false
 $BUILD_NUMBER_OVERRIDE = ""
+$SLACK_WEBHOOK_CLI = ""
+$SLACK_MENTION_CLI = ""
+$NO_SLACK = $false
 
 # Config defaults (overridden by .build_release.env)
 $FIREBASE_APP_ID_ANDROID = ""
@@ -53,6 +56,8 @@ $FIREBASE_TESTER_GROUPS = "testers"
 $FIREBASE_RELEASE_NOTES = ""
 $GOOGLE_PLAY_JSON_KEY = ""
 $ANDROID_PACKAGE_NAME = ""
+$SLACK_WEBHOOK_URL = ""
+$SLACK_MENTION = ""
 
 # ==========================================
 # LOAD PROJECT CONFIG
@@ -187,12 +192,15 @@ function Detect-MachineCredentials {
     $script:_DetectedGplayKey = ""
     $script:_DetectedAscKeyFile = ""
     $script:_DetectedAscKeyId = ""
+    $script:_DetectedSlackWebhook = ""
 
     $gplayDir = Join-Path $env:USERPROFILE ".config\gplay"
     $appstoreDir = Join-Path $env:USERPROFILE ".config\appstore"
+    $slackDir = Join-Path $env:USERPROFILE ".config\slack"
 
     if (-not (Test-Path $gplayDir)) { New-Item -ItemType Directory -Path $gplayDir -Force | Out-Null }
     if (-not (Test-Path $appstoreDir)) { New-Item -ItemType Directory -Path $appstoreDir -Force | Out-Null }
+    if (-not (Test-Path $slackDir)) { New-Item -ItemType Directory -Path $slackDir -Force | Out-Null }
 
     $saJson = Join-Path $gplayDir "service-account.json"
     if (Test-Path $saJson) {
@@ -209,6 +217,14 @@ function Detect-MachineCredentials {
         $script:_DetectedAscKeyFile = "~/.config/appstore/$($firstP8.Name)"
         if ($firstP8.Name -match 'AuthKey_([A-Za-z0-9]+)\.p8') {
             $script:_DetectedAscKeyId = $Matches[1]
+        }
+    }
+
+    $slackWebhookFile = Join-Path $slackDir "webhook_url"
+    if (Test-Path $slackWebhookFile) {
+        $firstLine = Get-Content -Path $slackWebhookFile -TotalCount 1 -ErrorAction SilentlyContinue
+        if ($firstLine) {
+            $script:_DetectedSlackWebhook = $firstLine.Trim()
         }
     }
 }
@@ -254,6 +270,13 @@ ASC_KEY_FILE=$script:_DetectedAscKeyFile
 # === iOS Build (Optional) ===
 # Path to ExportOptions.plist for manual signing (omit for Xcode automatic signing)
 # IOS_EXPORT_OPTIONS_PLIST=ios/ExportOptions.plist
+
+# === Slack Notification (Optional) ===
+# Incoming Webhook URL (or save globally in ~/.config/slack/webhook_url)
+SLACK_WEBHOOK_URL=$script:_DetectedSlackWebhook
+
+# Optional mention in Slack message (e.g., here, channel, <@U123456>, <!subteam^ID>)
+SLACK_MENTION=
 "@
     Set-Content -Path ".build_release.env" -Value $envTemplate -Encoding UTF8
     Write-Host "✅ Created .build_release.env" -ForegroundColor Green
@@ -274,6 +297,9 @@ ASC_KEY_FILE=$script:_DetectedAscKeyFile
         if (-not [string]::IsNullOrEmpty($script:_DetectedAscKeyId)) {
             Write-Host "      Key ID: $script:_DetectedAscKeyId" -ForegroundColor Cyan
         }
+    }
+    if (-not [string]::IsNullOrEmpty($script:_DetectedSlackWebhook)) {
+        Write-Host "   🔍 Auto-detected Slack webhook from ~/.config/slack/webhook_url" -ForegroundColor Cyan
     }
 }
 
@@ -303,6 +329,11 @@ Distribution:
   --notes <text>           Release notes for Firebase distribution
   --distribute-only        Skip build, distribute latest artifact from build\dist\
   --dry-run                Validate config and build, but skip actual upload
+
+Slack Notification:
+  --slack-webhook <url>    Slack Incoming Webhook URL (overrides .build_release.env)
+  --slack-mention <text>   Mention in Slack message (e.g., here, channel, <@U123>)
+  --no-slack               Skip Slack notification for this run
 
 Options:
   --setup                  Setup project credentials and .build_release.env
@@ -402,6 +433,21 @@ while ($i -lt $args.Count) {
         "^--build-number=(.*)$" {
             $BUILD_NUMBER_OVERRIDE = $Matches[1]; $i++; break
         }
+        "^--slack-webhook$" {
+            if ($i + 1 -lt $args.Count) { $SLACK_WEBHOOK_CLI = $args[$i+1]; $i += 2 } else { Write-Host "❌ Missing value for --slack-webhook" -ForegroundColor Red; exit 1 }; break
+        }
+        "^--slack-webhook=(.*)$" {
+            $SLACK_WEBHOOK_CLI = $Matches[1]; $i++; break
+        }
+        "^--slack-mention$" {
+            if ($i + 1 -lt $args.Count) { $SLACK_MENTION_CLI = $args[$i+1]; $i += 2 } else { Write-Host "❌ Missing value for --slack-mention" -ForegroundColor Red; exit 1 }; break
+        }
+        "^--slack-mention=(.*)$" {
+            $SLACK_MENTION_CLI = $Matches[1]; $i++; break
+        }
+        "^--no-slack$" {
+            $NO_SLACK = $true; $i++; break
+        }
         "^--setup$" {
             Run-Setup
         }
@@ -419,6 +465,17 @@ while ($i -lt $args.Count) {
 # Apply defaults from config (CLI flags take priority)
 if ([string]::IsNullOrEmpty($DIST_GROUPS)) { $DIST_GROUPS = $FIREBASE_TESTER_GROUPS }
 if ([string]::IsNullOrEmpty($DIST_NOTES)) { $DIST_NOTES = $FIREBASE_RELEASE_NOTES }
+if (-not [string]::IsNullOrEmpty($SLACK_WEBHOOK_CLI)) { $SLACK_WEBHOOK_URL = $SLACK_WEBHOOK_CLI }
+if (-not [string]::IsNullOrEmpty($SLACK_MENTION_CLI)) { $SLACK_MENTION = $SLACK_MENTION_CLI }
+
+# Fallback to machine-level Slack webhook if not set in project
+if ([string]::IsNullOrWhiteSpace($SLACK_WEBHOOK_URL)) {
+    $machineSlackFile = Join-Path $env:USERPROFILE ".config\slack\webhook_url"
+    if (Test-Path $machineSlackFile) {
+        $firstLine = Get-Content -Path $machineSlackFile -TotalCount 1 -ErrorAction SilentlyContinue
+        if ($firstLine) { $SLACK_WEBHOOK_URL = $firstLine.Trim() }
+    }
+}
 
 # Auto-detect Android package name if not explicitly set
 if ([string]::IsNullOrWhiteSpace($ANDROID_PACKAGE_NAME)) {
@@ -770,6 +827,113 @@ function Distribute-ToPlaystore {
 }
 
 # ==========================================
+# SLACK NOTIFICATION
+# ==========================================
+function Format-SlackMention {
+    param([string]$Mention)
+    switch ($Mention) {
+        { $_ -in @("here", "@here") }         { return "<!here>" }
+        { $_ -in @("channel", "@channel") }   { return "<!channel>" }
+        { $_ -in @("everyone", "@everyone") } { return "<!everyone>" }
+        default                               { return $Mention }
+    }
+}
+
+function Notify-Slack {
+    if ($NO_SLACK -or [string]::IsNullOrWhiteSpace($SLACK_WEBHOOK_URL)) {
+        return
+    }
+
+    Write-Host "`n💬 Slack Notification"
+
+    if ($DRY_RUN) {
+        Write-Host "   🏃 DRY RUN — Slack notification skipped." -ForegroundColor Yellow
+        return
+    }
+
+    $platformLabel = switch ($TARGET) {
+        "apk"       { "Android (APK)" }
+        "appbundle" { "Android (AAB)" }
+        "ipa"       { "iOS (IPA)" }
+        default     { $TARGET }
+    }
+
+    $distList = @()
+    if ($DIST_FIREBASE) {
+        if (-not [string]::IsNullOrWhiteSpace($DIST_GROUPS)) {
+            $distList += "Firebase (groups: $DIST_GROUPS)"
+        } else {
+            $distList += "Firebase"
+        }
+    }
+    if ($DIST_PLAYSTORE) {
+        $distList += "Play Store (track: $PLAY_TRACK)"
+    }
+    $distDetails = if ($distList.Count -gt 0) { $distList -join ", " } else { $DISTRIBUTE_TARGETS }
+
+    $gitBranch = (git rev-parse --abbrev-ref HEAD 2>$null)
+    if ([string]::IsNullOrWhiteSpace($gitBranch)) { $gitBranch = "unknown" }
+    $gitCommit = (git log -1 --pretty=format:"%h - %s" 2>$null)
+    if ([string]::IsNullOrWhiteSpace($gitCommit)) { $gitCommit = "N/A" }
+    $gitAuthor = (git config user.name 2>$null)
+    if ([string]::IsNullOrWhiteSpace($gitAuthor)) {
+        $gitAuthor = if (-not [string]::IsNullOrWhiteSpace($env:USERNAME)) { $env:USERNAME } else { "unknown" }
+    }
+
+    $headerText = "🚀 New Build Distributed: $APP_NAME v${VERSION_NAME}+${BUILD_NUMBER}"
+    $fallbackText = "$headerText ($platformLabel -> $distDetails)"
+    $appVerField = "*App & Version:*`n``$APP_NAME`` (``v${VERSION_NAME}+${BUILD_NUMBER}`` • $BUILD_MODE)"
+    $platField = "*Platform / Target:*`n$platformLabel"
+    $distField = "*Distributed To:*`n$distDetails"
+    $authorField = "*Author & Branch:*`n$gitAuthor (``$gitBranch``)"
+    $commitField = "*Commit:* ``$gitCommit``"
+
+    if (-not [string]::IsNullOrWhiteSpace($SLACK_MENTION)) {
+        $formattedMention = Format-SlackMention -Mention $SLACK_MENTION
+        $commitField = "$commitField  •  *CC:* $formattedMention"
+    }
+
+    $payloadObj = @{
+        text = $fallbackText
+        blocks = @(
+            @{
+                type = "header"
+                text = @{
+                    type = "plain_text"
+                    text = $headerText
+                    emoji = $true
+                }
+            },
+            @{
+                type = "section"
+                fields = @(
+                    @{ type = "mrkdwn"; text = $appVerField },
+                    @{ type = "mrkdwn"; text = $platField },
+                    @{ type = "mrkdwn"; text = $distField },
+                    @{ type = "mrkdwn"; text = $authorField }
+                )
+            },
+            @{
+                type = "section"
+                text = @{
+                    type = "mrkdwn"
+                    text = $commitField
+                }
+            }
+        )
+    }
+
+    $payloadJson = $payloadObj | ConvertTo-Json -Depth 10 -Compress
+    try {
+        $bytes = [System.Text.Encoding]::UTF8.GetBytes($payloadJson)
+        Invoke-RestMethod -Uri $SLACK_WEBHOOK_URL -Method Post -ContentType "application/json; charset=utf-8" -Body $bytes | Out-Null
+        Write-Host "   ✅ Slack notification sent." -ForegroundColor Green
+    } catch {
+        Write-Host "   ⚠️  WARNING: Failed to send Slack notification ($($_.Exception.Message))." -ForegroundColor Yellow
+    }
+}
+
+# ==========================================
 # STEP COUNTER
 # ==========================================
 if ($DISTRIBUTE_ONLY) { $TOTAL_STEPS = 3 }
@@ -989,6 +1153,8 @@ try {
         if ($DIST_PLAYSTORE) {
             Distribute-ToPlaystore $DEST_FILE_FORWARD
         }
+
+        Notify-Slack
     }
 
     # ------------------------------------------

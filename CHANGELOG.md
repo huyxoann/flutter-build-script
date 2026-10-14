@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2026-10-14
+
+### Added
+- **Slack Notifications on Distribution**:
+  - Automatically posts a consolidated **Slack Block Kit** summary message after all distribution targets succeed (when `SLACK_WEBHOOK_URL` is configured).
+  - Message includes:
+    - **App & Version**: App name, `v<version>+<build_number>`, and build mode (`release` / `profile` / `debug`).
+    - **Platform / Target**: `Android (APK)`, `Android (AAB)`, or `iOS (IPA)`.
+    - **Distributed To**: Targets with context (`Firebase (groups: ...)`, `Play Store (track: ...)`, `TestFlight`).
+    - **Author & Branch**: Git user / OS username and current Git branch.
+    - **Commit & Mention**: Latest commit `<short_hash> - <subject>` and optional team/user mention.
+  - **Machine-Level Webhook**: Supports storing a shared webhook URL in `~/.config/slack/webhook_url` (auto-created by `install.sh` / `install.ps1` and auto-detected during `--setup` or runtime).
+  - **New CLI Flags & Config Variables**:
+    - `SLACK_WEBHOOK_URL` & `--slack-webhook <url>`: Configure or override the Slack Incoming Webhook URL.
+    - `SLACK_MENTION` & `--slack-mention <text>`: Mention team or users (`here` $\rightarrow$ `<!here>`, `channel` $\rightarrow$ `<!channel>`, `everyone` $\rightarrow$ `<!everyone>`, or raw `<@U123>` / `<!subteam^ID>`).
+    - `--no-slack`: Skip Slack notification for a single run.
+  - **Safe & Non-Blocking**: Skips sending during `--dry-run`, and logs a non-fatal warning (`⚠️ WARNING`) if the webhook request fails so successful store/Firebase uploads never fail the pipeline.
+
+---
+
 ## [1.1.0] - 2026-10-12
 
 ### Added

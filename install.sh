@@ -112,11 +112,12 @@ case ":$PATH:" in
 esac
 
 # Ensure standard credential directories exist
-mkdir -p "$HOME/.config/gplay" "$HOME/.config/appstore"
+mkdir -p "$HOME/.config/gplay" "$HOME/.config/appstore" "$HOME/.config/slack"
 
 echo "📁 Credential directories ready:"
 echo "   - ~/.config/gplay/    (Place Google Play service-account.json here)"
 echo "   - ~/.config/appstore/ (Place App Store Connect AuthKey_*.p8 here)"
+echo "   - ~/.config/slack/    (Place webhook_url file here for global Slack notifications)"
 
 echo ""
 echo "🚀 Ready! Run 'build_release --help' from any Flutter project."

@@ -48,6 +48,9 @@ DRY_RUN=false
 BUILD_NUMBER_OVERRIDE=""
 SKIP_STORE_VERSION=false
 BUILD_NUMBER_INFO=""
+SLACK_WEBHOOK_CLI=""
+SLACK_MENTION_CLI=""
+NO_SLACK=false
 
 # Config defaults (overridden by .build_release.env)
 FIREBASE_APP_ID_ANDROID=""
@@ -61,6 +64,8 @@ ASC_KEY_ID=""
 ASC_ISSUER_ID=""
 ASC_KEY_FILE=""
 IOS_EXPORT_OPTIONS_PLIST=""
+SLACK_WEBHOOK_URL=""
+SLACK_MENTION=""
 
 # ==========================================
 # LOAD PROJECT CONFIG
@@ -96,6 +101,11 @@ Distribution:
   --notes <text>           Release notes for Firebase distribution
   --distribute-only        Skip build, distribute latest artifact from build/dist/
   --dry-run                Validate config and build, but skip actual upload
+
+Slack Notification:
+  --slack-webhook <url>    Slack Incoming Webhook URL (overrides .build_release.env)
+  --slack-mention <text>   Mention in Slack message (e.g., here, channel, <@U123>)
+  --no-slack               Skip Slack notification for this run
 
 Options:
   --build-number <num>, -b <num>  Set build number manually (overrides auto-detection)
@@ -308,12 +318,14 @@ detect_machine_credentials() {
   _DETECTED_GPLAY_KEY=""
   _DETECTED_ASC_KEY_FILE=""
   _DETECTED_ASC_KEY_ID=""
+  _DETECTED_SLACK_WEBHOOK=""
 
   local gplay_dir="$HOME/.config/gplay"
   local appstore_dir="$HOME/.config/appstore"
+  local slack_dir="$HOME/.config/slack"
 
   # Ensure machine credential folders exist
-  mkdir -p "$gplay_dir" "$appstore_dir"
+  mkdir -p "$gplay_dir" "$appstore_dir" "$slack_dir"
 
   # 1. Google Play JSON key
   if [ -f "$gplay_dir/service-account.json" ]; then
@@ -336,6 +348,11 @@ detect_machine_credentials() {
     if [[ "$p8_name" =~ AuthKey_([A-Za-z0-9]+)\.p8 ]]; then
       _DETECTED_ASC_KEY_ID="${BASH_REMATCH[1]}"
     fi
+  fi
+
+  # 3. Slack Webhook URL
+  if [ -f "$slack_dir/webhook_url" ]; then
+    _DETECTED_SLACK_WEBHOOK=$(head -n 1 "$slack_dir/webhook_url" 2>/dev/null | tr -d ' \r\n')
   fi
 }
 
@@ -533,6 +550,13 @@ ASC_KEY_FILE=$_DETECTED_ASC_KEY_FILE
 # === iOS Build (Optional) ===
 # Path to ExportOptions.plist for manual signing (omit for Xcode automatic signing)
 # IOS_EXPORT_OPTIONS_PLIST=ios/ExportOptions.plist
+
+# === Slack Notification (Optional) ===
+# Incoming Webhook URL (or save globally in ~/.config/slack/webhook_url)
+SLACK_WEBHOOK_URL=$_DETECTED_SLACK_WEBHOOK
+
+# Optional mention in Slack message (e.g., here, channel, <@U123456>, <!subteam^ID>)
+SLACK_MENTION=
 ENV_TEMPLATE
 
   echo "✅ Created .build_release.env"
@@ -553,6 +577,9 @@ ENV_TEMPLATE
   if [ -n "$_DETECTED_ASC_KEY_FILE" ]; then
     echo "   🔍 Auto-detected App Store key: $_DETECTED_ASC_KEY_FILE"
     [ -n "$_DETECTED_ASC_KEY_ID" ] && echo "      Key ID: $_DETECTED_ASC_KEY_ID"
+  fi
+  if [ -n "$_DETECTED_SLACK_WEBHOOK" ]; then
+    echo "   🔍 Auto-detected Slack webhook from ~/.config/slack/webhook_url"
   fi
 }
 
@@ -605,6 +632,16 @@ while [[ $# -gt 0 ]]; do
       BUILD_NUMBER_OVERRIDE="${1#*=}"; shift ;;
     --skip-store-version|--no-store-version)
       SKIP_STORE_VERSION=true; shift ;;
+    --slack-webhook)
+      SLACK_WEBHOOK_CLI="$2"; shift 2 ;;
+    --slack-webhook=*)
+      SLACK_WEBHOOK_CLI="${1#*=}"; shift ;;
+    --slack-mention)
+      SLACK_MENTION_CLI="$2"; shift 2 ;;
+    --slack-mention=*)
+      SLACK_MENTION_CLI="${1#*=}"; shift ;;
+    --no-slack)
+      NO_SLACK=true; shift ;;
     --setup)
       run_setup ;;
     --help|-h)
@@ -619,6 +656,13 @@ done
 # Apply defaults from config (CLI flags take priority)
 DIST_GROUPS="${DIST_GROUPS:-$FIREBASE_TESTER_GROUPS}"
 DIST_NOTES="${DIST_NOTES:-$FIREBASE_RELEASE_NOTES}"
+SLACK_WEBHOOK_URL="${SLACK_WEBHOOK_CLI:-$SLACK_WEBHOOK_URL}"
+SLACK_MENTION="${SLACK_MENTION_CLI:-$SLACK_MENTION}"
+
+# Fallback to machine-level Slack webhook if not set in project
+if [ -z "$SLACK_WEBHOOK_URL" ] && [ -f "$HOME/.config/slack/webhook_url" ]; then
+  SLACK_WEBHOOK_URL=$(head -n 1 "$HOME/.config/slack/webhook_url" 2>/dev/null | tr -d ' \r\n')
+fi
 
 # Auto-detect Android package name if not explicitly set
 if [ -z "$ANDROID_PACKAGE_NAME" ]; then
@@ -1035,6 +1079,152 @@ distribute_to_appstore() {
 }
 
 # ==========================================
+# SLACK NOTIFICATION
+# ==========================================
+json_escape() {
+  local s="$1"
+  s="${s//\\/\\\\}"
+  s="${s//\"/\\\"}"
+  s="${s//$'\n'/\\n}"
+  s="${s//$'\r'/}"
+  s="${s//$'\t'/ }"
+  printf '%s' "$s"
+}
+
+format_slack_mention() {
+  local m="$1"
+  case "$m" in
+    here|"@here")       printf '<!here>' ;;
+    channel|"@channel") printf '<!channel>' ;;
+    everyone|"@everyone") printf '<!everyone>' ;;
+    *)                  printf '%s' "$m" ;;
+  esac
+}
+
+build_slack_payload() {
+  local platform_label
+  case "$TARGET" in
+    apk)       platform_label="Android (APK)" ;;
+    appbundle) platform_label="Android (AAB)" ;;
+    ipa)       platform_label="iOS (IPA)" ;;
+    *)         platform_label="$TARGET" ;;
+  esac
+
+  local dist_details=""
+  if [ "$DIST_FIREBASE" = true ]; then
+    local fb_item="Firebase"
+    [ -n "$DIST_GROUPS" ] && fb_item="Firebase (groups: $DIST_GROUPS)"
+    dist_details="$fb_item"
+  fi
+  if [ "$DIST_PLAYSTORE" = true ]; then
+    local ps_item="Play Store (track: $PLAY_TRACK)"
+    if [ -n "$dist_details" ]; then
+      dist_details="$dist_details, $ps_item"
+    else
+      dist_details="$ps_item"
+    fi
+  fi
+  if [ "$DIST_APPSTORE" = true ]; then
+    local as_item="TestFlight"
+    if [ -n "$dist_details" ]; then
+      dist_details="$dist_details, $as_item"
+    else
+      dist_details="$as_item"
+    fi
+  fi
+  [ -z "$dist_details" ] && dist_details="$DISTRIBUTE_TARGETS"
+
+  local git_branch git_commit git_author
+  git_branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "unknown")
+  git_commit=$(git log -1 --pretty=format:"%h - %s" 2>/dev/null || echo "N/A")
+  git_author=$(git config user.name 2>/dev/null || true)
+  [ -z "$git_author" ] && git_author="${USER:-unknown}"
+
+  local header_text="🚀 New Build Distributed: $APP_NAME v${VERSION_NAME}+${BUILD_NUMBER}"
+  local fallback_text="$header_text ($platform_label -> $dist_details)"
+  local app_ver_field="*App & Version:*\n\`$APP_NAME\` (\`v${VERSION_NAME}+${BUILD_NUMBER}\` • $BUILD_MODE)"
+  local plat_field="*Platform / Target:*\n$platform_label"
+  local dist_field="*Distributed To:*\n$dist_details"
+  local author_field="*Author & Branch:*\n$git_author (\`$git_branch\`)"
+  local commit_field="*Commit:* \`$git_commit\`"
+
+  if [ -n "$SLACK_MENTION" ]; then
+    local formatted_mention
+    formatted_mention=$(format_slack_mention "$SLACK_MENTION")
+    commit_field="$commit_field  •  *CC:* $formatted_mention"
+  fi
+
+  cat <<EOF
+{
+  "text": "$(json_escape "$fallback_text")",
+  "blocks": [
+    {
+      "type": "header",
+      "text": {
+        "type": "plain_text",
+        "text": "$(json_escape "$header_text")",
+        "emoji": true
+      }
+    },
+    {
+      "type": "section",
+      "fields": [
+        {
+          "type": "mrkdwn",
+          "text": "$(json_escape "$app_ver_field")"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "$(json_escape "$plat_field")"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "$(json_escape "$dist_field")"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "$(json_escape "$author_field")"
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "$(json_escape "$commit_field")"
+      }
+    }
+  ]
+}
+EOF
+}
+
+notify_slack() {
+  if [ "$NO_SLACK" = true ] || [ -z "$SLACK_WEBHOOK_URL" ]; then
+    return 0
+  fi
+
+  echo ""
+  echo "💬 Slack Notification"
+
+  if [ "$DRY_RUN" = true ]; then
+    echo "   🏃 DRY RUN — Slack notification skipped."
+    return 0
+  fi
+
+  local payload http_code
+  payload=$(build_slack_payload)
+
+  http_code=$(curl -s -o /dev/null -w "%{http_code}" -X POST -H 'Content-type: application/json' --data "$payload" "$SLACK_WEBHOOK_URL" 2>/dev/null || echo "000")
+
+  if [ "$http_code" = "200" ]; then
+    echo "   ✅ Slack notification sent."
+  else
+    echo "   ⚠️  WARNING: Failed to send Slack notification (HTTP $http_code)."
+  fi
+}
+
+# ==========================================
 # BUILD NUMBER RESOLUTION (Store-driven with fallback)
 # ==========================================
 resolve_build_number() {
@@ -1404,6 +1594,8 @@ if [ "$HAS_DISTRIBUTE" = true ]; then
   if [ "$DIST_APPSTORE" = true ]; then
     distribute_to_appstore "$DEST_FILE"
   fi
+
+  notify_slack
 fi
 
 # ------------------------------------------

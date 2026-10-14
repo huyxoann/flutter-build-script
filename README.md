@@ -18,6 +18,7 @@ Supports **macOS**, **Linux**, and **Windows**.
 - **Distribution via Fastlane**: Ship to Firebase, Google Play, and TestFlight in one command
 - **Auto-Bootstrap Fastlane**: Temp config generated on the fly — no files added to your project
 - **Multi-Target Distribution**: e.g., `--distribute firebase,appstore` in one run
+- **Slack Notifications**: Post a Block Kit summary to Slack automatically after distribution
 - **Distribute-Only Mode**: Re-upload existing artifacts without rebuilding
 - **Dry-Run Mode**: Validate everything without uploading
 
@@ -112,12 +113,14 @@ This will:
 3. 🔍 **Auto-detect Firebase tester groups** via `firebase appdistribution:groups:list`
 4. 🔍 **Auto-detect Google Play JSON key** from `~/.config/gplay/service-account.json`
 5. 🔍 **Auto-detect App Store Connect key** from `~/.config/appstore/AuthKey_*.p8` (and auto-extract Key ID)
+6. 🔍 **Auto-detect Slack Webhook URL** from `~/.config/slack/webhook_url`
 
 ### Machine Credential Directories
 
 The installer creates these standard directories on your machine:
 * `~/.config/gplay/` — Put your Google Play `service-account.json` here (shared across all projects)
 * `~/.config/appstore/` — Put your App Store Connect `AuthKey_<KEY_ID>.p8` here
+* `~/.config/slack/` — Put a `webhook_url` file containing your Slack Incoming Webhook URL here
 
 When you run `build_release --setup` in any project, it automatically links to these keys!
 
@@ -202,6 +205,9 @@ build_release --distribute appstore --distribute-only
 | `--notes <text>` | Firebase release notes | from `.build_release.env` |
 | `--distribute-only` | Skip build, use latest artifact | ❌ No |
 | `--dry-run` | Validate and build, skip upload | ❌ No |
+| `--slack-webhook <url>` | Slack Incoming Webhook URL (overrides `.build_release.env`) | from `.build_release.env` |
+| `--slack-mention <text>` | Mention in Slack (`here`, `channel`, `<@U123>`, `<!subteam^ID>`) | from `.build_release.env` |
+| `--no-slack` | Skip Slack notification for this run | ❌ No |
 
 ### Build Target Auto-Inference
 
@@ -287,6 +293,16 @@ Running `flutter clean` wipes everything in `build/`, including artifacts and Fa
    ASC_KEY_ID=ABC123
    ASC_ISSUER_ID=def-456-ghi
    ASC_KEY_FILE=~/.config/appstore/AuthKey_ABC123.p8
+   ```
+
+### Slack Notification (Optional)
+
+1. Create a Slack App or enable **Incoming Webhooks** for your workspace at [api.slack.com/apps](https://api.slack.com/apps)
+2. Create a webhook for your team channel and copy the Webhook URL
+3. Save globally for all projects in `~/.config/slack/webhook_url`, or add to `.build_release.env`:
+   ```env
+   SLACK_WEBHOOK_URL=https://hooks.slack.com/services/T000/B000/XXXX
+   SLACK_MENTION=here
    ```
 
 ---
