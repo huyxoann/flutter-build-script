@@ -16,9 +16,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     - **Distributed To**: Targets with context (`Firebase (groups: ...)`, `Play Store (track: ...)`, `TestFlight`).
     - **Author & Branch**: Git user / OS username and current Git branch.
     - **Commit & Mention**: Latest commit `<short_hash> - <subject>` and optional team/user mention.
-  - **Machine-Level Webhook**: Supports storing a shared webhook URL in `~/.config/slack/webhook_url` (auto-created by `install.sh` / `install.ps1` and auto-detected during `--setup` or runtime).
+  - **Machine-Level Credentials**: Supports storing a shared webhook URL in `~/.config/slack/webhook_url` or Bot Token + Channel ID in `~/.config/slack/bot_token` & `~/.config/slack/channel_id` (auto-created by `install.sh` / `install.ps1` and auto-detected during `--setup` or runtime).
   - **New CLI Flags & Config Variables**:
     - `SLACK_WEBHOOK_URL` & `--slack-webhook <url>`: Configure or override the Slack Incoming Webhook URL.
+    - `SLACK_BOT_TOKEN`, `SLACK_CHANNEL_ID` & `--slack-channel <id>`: Authenticate via Slack Bot (`chat.postMessage` API) and target any channel ID without needing browser-generated webhooks.
     - `SLACK_MENTION` & `--slack-mention <text>`: Mention team or users (`here` $\rightarrow$ `<!here>`, `channel` $\rightarrow$ `<!channel>`, `everyone` $\rightarrow$ `<!everyone>`, or raw `<@U123>` / `<!subteam^ID>`).
     - `--no-slack`: Skip Slack notification for a single run.
   - **Safe & Non-Blocking**: Skips sending during `--dry-run`, and logs a non-fatal warning (`⚠️ WARNING`) if the webhook request fails so successful store/Firebase uploads never fail the pipeline.

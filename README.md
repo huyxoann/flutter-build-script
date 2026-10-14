@@ -120,7 +120,7 @@ This will:
 The installer creates these standard directories on your machine:
 * `~/.config/gplay/` — Put your Google Play `service-account.json` here (shared across all projects)
 * `~/.config/appstore/` — Put your App Store Connect `AuthKey_<KEY_ID>.p8` here
-* `~/.config/slack/` — Put a `webhook_url` file containing your Slack Incoming Webhook URL here
+* `~/.config/slack/` — Put `webhook_url` (or `bot_token` + `channel_id`) here for shared Slack notifications
 
 When you run `build_release --setup` in any project, it automatically links to these keys!
 
@@ -206,6 +206,7 @@ build_release --distribute appstore --distribute-only
 | `--distribute-only` | Skip build, use latest artifact | ❌ No |
 | `--dry-run` | Validate and build, skip upload | ❌ No |
 | `--slack-webhook <url>` | Slack Incoming Webhook URL (overrides `.build_release.env`) | from `.build_release.env` |
+| `--slack-channel <id>` | Slack Channel ID when using `SLACK_BOT_TOKEN` | from `.build_release.env` |
 | `--slack-mention <text>` | Mention in Slack (`here`, `channel`, `<@U123>`, `<!subteam^ID>`) | from `.build_release.env` |
 | `--no-slack` | Skip Slack notification for this run | ❌ No |
 
@@ -297,13 +298,19 @@ Running `flutter clean` wipes everything in `build/`, including artifacts and Fa
 
 ### Slack Notification (Optional)
 
-1. Create a Slack App or enable **Incoming Webhooks** for your workspace at [api.slack.com/apps](https://api.slack.com/apps)
-2. Create a webhook for your team channel and copy the Webhook URL
-3. Save globally for all projects in `~/.config/slack/webhook_url`, or add to `.build_release.env`:
-   ```env
-   SLACK_WEBHOOK_URL=https://hooks.slack.com/services/T000/B000/XXXX
-   SLACK_MENTION=here
-   ```
+Supports either **Incoming Webhook URL** or **Slack Bot Token + Channel ID**:
+
+```env
+# Option 1: Incoming Webhook URL (or save globally in ~/.config/slack/webhook_url)
+SLACK_WEBHOOK_URL=https://hooks.slack.com/services/T000/B000/XXXX
+
+# Option 2: Slack Bot Token + Channel ID (or save globally in ~/.config/slack/bot_token & channel_id)
+SLACK_BOT_TOKEN=xoxb-...
+SLACK_CHANNEL_ID=C0BQ89RRCKV
+
+# Optional mention
+SLACK_MENTION=here
+```
 
 ---
 

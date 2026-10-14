@@ -49,6 +49,7 @@ BUILD_NUMBER_OVERRIDE=""
 SKIP_STORE_VERSION=false
 BUILD_NUMBER_INFO=""
 SLACK_WEBHOOK_CLI=""
+SLACK_CHANNEL_CLI=""
 SLACK_MENTION_CLI=""
 NO_SLACK=false
 
@@ -65,6 +66,8 @@ ASC_ISSUER_ID=""
 ASC_KEY_FILE=""
 IOS_EXPORT_OPTIONS_PLIST=""
 SLACK_WEBHOOK_URL=""
+SLACK_BOT_TOKEN=""
+SLACK_CHANNEL_ID=""
 SLACK_MENTION=""
 
 # ==========================================
@@ -104,6 +107,7 @@ Distribution:
 
 Slack Notification:
   --slack-webhook <url>    Slack Incoming Webhook URL (overrides .build_release.env)
+  --slack-channel <id>     Slack Channel ID when using SLACK_BOT_TOKEN (e.g., C0BQ89RRCKV)
   --slack-mention <text>   Mention in Slack message (e.g., here, channel, <@U123>)
   --no-slack               Skip Slack notification for this run
 
@@ -319,6 +323,8 @@ detect_machine_credentials() {
   _DETECTED_ASC_KEY_FILE=""
   _DETECTED_ASC_KEY_ID=""
   _DETECTED_SLACK_WEBHOOK=""
+  _DETECTED_SLACK_BOT_TOKEN=""
+  _DETECTED_SLACK_CHANNEL_ID=""
 
   local gplay_dir="$HOME/.config/gplay"
   local appstore_dir="$HOME/.config/appstore"
@@ -350,9 +356,15 @@ detect_machine_credentials() {
     fi
   fi
 
-  # 3. Slack Webhook URL
+  # 3. Slack Webhook URL or Bot Token + Channel ID
   if [ -f "$slack_dir/webhook_url" ]; then
     _DETECTED_SLACK_WEBHOOK=$(head -n 1 "$slack_dir/webhook_url" 2>/dev/null | tr -d ' \r\n')
+  fi
+  if [ -f "$slack_dir/bot_token" ]; then
+    _DETECTED_SLACK_BOT_TOKEN=$(head -n 1 "$slack_dir/bot_token" 2>/dev/null | tr -d ' \r\n')
+  fi
+  if [ -f "$slack_dir/channel_id" ]; then
+    _DETECTED_SLACK_CHANNEL_ID=$(head -n 1 "$slack_dir/channel_id" 2>/dev/null | tr -d ' \r\n')
   fi
 }
 
@@ -552,8 +564,12 @@ ASC_KEY_FILE=$_DETECTED_ASC_KEY_FILE
 # IOS_EXPORT_OPTIONS_PLIST=ios/ExportOptions.plist
 
 # === Slack Notification (Optional) ===
-# Incoming Webhook URL (or save globally in ~/.config/slack/webhook_url)
+# Option 1: Incoming Webhook URL (or save globally in ~/.config/slack/webhook_url)
 SLACK_WEBHOOK_URL=$_DETECTED_SLACK_WEBHOOK
+
+# Option 2: Slack Bot Token + Channel ID (or save globally in ~/.config/slack/bot_token & channel_id)
+SLACK_BOT_TOKEN=$_DETECTED_SLACK_BOT_TOKEN
+SLACK_CHANNEL_ID=$_DETECTED_SLACK_CHANNEL_ID
 
 # Optional mention in Slack message (e.g., here, channel, <@U123456>, <!subteam^ID>)
 SLACK_MENTION=
@@ -580,6 +596,8 @@ ENV_TEMPLATE
   fi
   if [ -n "$_DETECTED_SLACK_WEBHOOK" ]; then
     echo "   🔍 Auto-detected Slack webhook from ~/.config/slack/webhook_url"
+  elif [ -n "$_DETECTED_SLACK_BOT_TOKEN" ]; then
+    echo "   🔍 Auto-detected Slack Bot Token from ~/.config/slack/bot_token (Channel: $_DETECTED_SLACK_CHANNEL_ID)"
   fi
 }
 
@@ -636,6 +654,10 @@ while [[ $# -gt 0 ]]; do
       SLACK_WEBHOOK_CLI="$2"; shift 2 ;;
     --slack-webhook=*)
       SLACK_WEBHOOK_CLI="${1#*=}"; shift ;;
+    --slack-channel)
+      SLACK_CHANNEL_CLI="$2"; shift 2 ;;
+    --slack-channel=*)
+      SLACK_CHANNEL_CLI="${1#*=}"; shift ;;
     --slack-mention)
       SLACK_MENTION_CLI="$2"; shift 2 ;;
     --slack-mention=*)
@@ -657,11 +679,18 @@ done
 DIST_GROUPS="${DIST_GROUPS:-$FIREBASE_TESTER_GROUPS}"
 DIST_NOTES="${DIST_NOTES:-$FIREBASE_RELEASE_NOTES}"
 SLACK_WEBHOOK_URL="${SLACK_WEBHOOK_CLI:-$SLACK_WEBHOOK_URL}"
+SLACK_CHANNEL_ID="${SLACK_CHANNEL_CLI:-$SLACK_CHANNEL_ID}"
 SLACK_MENTION="${SLACK_MENTION_CLI:-$SLACK_MENTION}"
 
-# Fallback to machine-level Slack webhook if not set in project
+# Fallback to machine-level Slack credentials if not set in project
 if [ -z "$SLACK_WEBHOOK_URL" ] && [ -f "$HOME/.config/slack/webhook_url" ]; then
   SLACK_WEBHOOK_URL=$(head -n 1 "$HOME/.config/slack/webhook_url" 2>/dev/null | tr -d ' \r\n')
+fi
+if [ -z "$SLACK_BOT_TOKEN" ] && [ -f "$HOME/.config/slack/bot_token" ]; then
+  SLACK_BOT_TOKEN=$(head -n 1 "$HOME/.config/slack/bot_token" 2>/dev/null | tr -d ' \r\n')
+fi
+if [ -z "$SLACK_CHANNEL_ID" ] && [ -f "$HOME/.config/slack/channel_id" ]; then
+  SLACK_CHANNEL_ID=$(head -n 1 "$HOME/.config/slack/channel_id" 2>/dev/null | tr -d ' \r\n')
 fi
 
 # Auto-detect Android package name if not explicitly set
@@ -1154,8 +1183,14 @@ build_slack_payload() {
     commit_field="$commit_field  •  *CC:* $formatted_mention"
   fi
 
+  local channel_prop=""
+  if [ -n "$SLACK_CHANNEL_ID" ]; then
+    channel_prop="\"channel\": \"$(json_escape "$SLACK_CHANNEL_ID")\","
+  fi
+
   cat <<EOF
 {
+  $channel_prop
   "text": "$(json_escape "$fallback_text")",
   "blocks": [
     {
@@ -1200,7 +1235,18 @@ EOF
 }
 
 notify_slack() {
-  if [ "$NO_SLACK" = true ] || [ -z "$SLACK_WEBHOOK_URL" ]; then
+  if [ "$NO_SLACK" = true ]; then
+    return 0
+  fi
+
+  local use_webhook=false
+  local use_bot=false
+
+  if [ -n "$SLACK_WEBHOOK_URL" ]; then
+    use_webhook=true
+  elif [ -n "$SLACK_BOT_TOKEN" ] && [ -n "$SLACK_CHANNEL_ID" ]; then
+    use_bot=true
+  else
     return 0
   fi
 
@@ -1215,12 +1261,23 @@ notify_slack() {
   local payload http_code
   payload=$(build_slack_payload)
 
-  http_code=$(curl -s -o /dev/null -w "%{http_code}" -X POST -H 'Content-type: application/json' --data "$payload" "$SLACK_WEBHOOK_URL" 2>/dev/null || echo "000")
-
-  if [ "$http_code" = "200" ]; then
-    echo "   ✅ Slack notification sent."
-  else
-    echo "   ⚠️  WARNING: Failed to send Slack notification (HTTP $http_code)."
+  if [ "$use_webhook" = true ]; then
+    http_code=$(curl -s -o /dev/null -w "%{http_code}" -X POST -H 'Content-type: application/json' --data "$payload" "$SLACK_WEBHOOK_URL" 2>/dev/null || echo "000")
+    if [ "$http_code" = "200" ]; then
+      echo "   ✅ Slack notification sent."
+    else
+      echo "   ⚠️  WARNING: Failed to send Slack notification (HTTP $http_code)."
+    fi
+  elif [ "$use_bot" = true ]; then
+    local resp
+    resp=$(curl -s -X POST -H "Authorization: Bearer $SLACK_BOT_TOKEN" -H 'Content-type: application/json; charset=utf-8' --data "$payload" "https://slack.com/api/chat.postMessage" 2>/dev/null || echo '{"ok":false,"error":"network_error"}')
+    if echo "$resp" | grep -q '"ok":true'; then
+      echo "   ✅ Slack notification sent (channel: $SLACK_CHANNEL_ID)."
+    else
+      local err_msg
+      err_msg=$(echo "$resp" | sed -n -E 's/.*"error":"([^"]+)".*/\1/p')
+      echo "   ⚠️  WARNING: Failed to send Slack notification (${err_msg:-unknown_error})."
+    fi
   fi
 }
 

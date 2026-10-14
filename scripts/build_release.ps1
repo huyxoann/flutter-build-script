@@ -45,6 +45,7 @@ $DISTRIBUTE_ONLY = $false
 $DRY_RUN = $false
 $BUILD_NUMBER_OVERRIDE = ""
 $SLACK_WEBHOOK_CLI = ""
+$SLACK_CHANNEL_CLI = ""
 $SLACK_MENTION_CLI = ""
 $NO_SLACK = $false
 
@@ -57,6 +58,8 @@ $FIREBASE_RELEASE_NOTES = ""
 $GOOGLE_PLAY_JSON_KEY = ""
 $ANDROID_PACKAGE_NAME = ""
 $SLACK_WEBHOOK_URL = ""
+$SLACK_BOT_TOKEN = ""
+$SLACK_CHANNEL_ID = ""
 $SLACK_MENTION = ""
 
 # ==========================================
@@ -193,6 +196,8 @@ function Detect-MachineCredentials {
     $script:_DetectedAscKeyFile = ""
     $script:_DetectedAscKeyId = ""
     $script:_DetectedSlackWebhook = ""
+    $script:_DetectedSlackBotToken = ""
+    $script:_DetectedSlackChannelId = ""
 
     $gplayDir = Join-Path $env:USERPROFILE ".config\gplay"
     $appstoreDir = Join-Path $env:USERPROFILE ".config\appstore"
@@ -223,9 +228,17 @@ function Detect-MachineCredentials {
     $slackWebhookFile = Join-Path $slackDir "webhook_url"
     if (Test-Path $slackWebhookFile) {
         $firstLine = Get-Content -Path $slackWebhookFile -TotalCount 1 -ErrorAction SilentlyContinue
-        if ($firstLine) {
-            $script:_DetectedSlackWebhook = $firstLine.Trim()
-        }
+        if ($firstLine) { $script:_DetectedSlackWebhook = $firstLine.Trim() }
+    }
+    $slackBotTokenFile = Join-Path $slackDir "bot_token"
+    if (Test-Path $slackBotTokenFile) {
+        $firstLine = Get-Content -Path $slackBotTokenFile -TotalCount 1 -ErrorAction SilentlyContinue
+        if ($firstLine) { $script:_DetectedSlackBotToken = $firstLine.Trim() }
+    }
+    $slackChannelIdFile = Join-Path $slackDir "channel_id"
+    if (Test-Path $slackChannelIdFile) {
+        $firstLine = Get-Content -Path $slackChannelIdFile -TotalCount 1 -ErrorAction SilentlyContinue
+        if ($firstLine) { $script:_DetectedSlackChannelId = $firstLine.Trim() }
     }
 }
 
@@ -272,8 +285,12 @@ ASC_KEY_FILE=$script:_DetectedAscKeyFile
 # IOS_EXPORT_OPTIONS_PLIST=ios/ExportOptions.plist
 
 # === Slack Notification (Optional) ===
-# Incoming Webhook URL (or save globally in ~/.config/slack/webhook_url)
+# Option 1: Incoming Webhook URL (or save globally in ~/.config/slack/webhook_url)
 SLACK_WEBHOOK_URL=$script:_DetectedSlackWebhook
+
+# Option 2: Slack Bot Token + Channel ID (or save globally in ~/.config/slack/bot_token & channel_id)
+SLACK_BOT_TOKEN=$script:_DetectedSlackBotToken
+SLACK_CHANNEL_ID=$script:_DetectedSlackChannelId
 
 # Optional mention in Slack message (e.g., here, channel, <@U123456>, <!subteam^ID>)
 SLACK_MENTION=
@@ -300,6 +317,8 @@ SLACK_MENTION=
     }
     if (-not [string]::IsNullOrEmpty($script:_DetectedSlackWebhook)) {
         Write-Host "   🔍 Auto-detected Slack webhook from ~/.config/slack/webhook_url" -ForegroundColor Cyan
+    } elseif (-not [string]::IsNullOrEmpty($script:_DetectedSlackBotToken)) {
+        Write-Host "   🔍 Auto-detected Slack Bot Token from ~/.config/slack/bot_token (Channel: $script:_DetectedSlackChannelId)" -ForegroundColor Cyan
     }
 }
 
@@ -332,6 +351,7 @@ Distribution:
 
 Slack Notification:
   --slack-webhook <url>    Slack Incoming Webhook URL (overrides .build_release.env)
+  --slack-channel <id>     Slack Channel ID when using SLACK_BOT_TOKEN
   --slack-mention <text>   Mention in Slack message (e.g., here, channel, <@U123>)
   --no-slack               Skip Slack notification for this run
 
@@ -439,6 +459,12 @@ while ($i -lt $args.Count) {
         "^--slack-webhook=(.*)$" {
             $SLACK_WEBHOOK_CLI = $Matches[1]; $i++; break
         }
+        "^--slack-channel$" {
+            if ($i + 1 -lt $args.Count) { $SLACK_CHANNEL_CLI = $args[$i+1]; $i += 2 } else { Write-Host "❌ Missing value for --slack-channel" -ForegroundColor Red; exit 1 }; break
+        }
+        "^--slack-channel=(.*)$" {
+            $SLACK_CHANNEL_CLI = $Matches[1]; $i++; break
+        }
         "^--slack-mention$" {
             if ($i + 1 -lt $args.Count) { $SLACK_MENTION_CLI = $args[$i+1]; $i += 2 } else { Write-Host "❌ Missing value for --slack-mention" -ForegroundColor Red; exit 1 }; break
         }
@@ -466,14 +492,29 @@ while ($i -lt $args.Count) {
 if ([string]::IsNullOrEmpty($DIST_GROUPS)) { $DIST_GROUPS = $FIREBASE_TESTER_GROUPS }
 if ([string]::IsNullOrEmpty($DIST_NOTES)) { $DIST_NOTES = $FIREBASE_RELEASE_NOTES }
 if (-not [string]::IsNullOrEmpty($SLACK_WEBHOOK_CLI)) { $SLACK_WEBHOOK_URL = $SLACK_WEBHOOK_CLI }
+if (-not [string]::IsNullOrEmpty($SLACK_CHANNEL_CLI)) { $SLACK_CHANNEL_ID = $SLACK_CHANNEL_CLI }
 if (-not [string]::IsNullOrEmpty($SLACK_MENTION_CLI)) { $SLACK_MENTION = $SLACK_MENTION_CLI }
 
-# Fallback to machine-level Slack webhook if not set in project
+# Fallback to machine-level Slack credentials if not set in project
 if ([string]::IsNullOrWhiteSpace($SLACK_WEBHOOK_URL)) {
     $machineSlackFile = Join-Path $env:USERPROFILE ".config\slack\webhook_url"
     if (Test-Path $machineSlackFile) {
         $firstLine = Get-Content -Path $machineSlackFile -TotalCount 1 -ErrorAction SilentlyContinue
         if ($firstLine) { $SLACK_WEBHOOK_URL = $firstLine.Trim() }
+    }
+}
+if ([string]::IsNullOrWhiteSpace($SLACK_BOT_TOKEN)) {
+    $machineBotFile = Join-Path $env:USERPROFILE ".config\slack\bot_token"
+    if (Test-Path $machineBotFile) {
+        $firstLine = Get-Content -Path $machineBotFile -TotalCount 1 -ErrorAction SilentlyContinue
+        if ($firstLine) { $SLACK_BOT_TOKEN = $firstLine.Trim() }
+    }
+}
+if ([string]::IsNullOrWhiteSpace($SLACK_CHANNEL_ID)) {
+    $machineChanFile = Join-Path $env:USERPROFILE ".config\slack\channel_id"
+    if (Test-Path $machineChanFile) {
+        $firstLine = Get-Content -Path $machineChanFile -TotalCount 1 -ErrorAction SilentlyContinue
+        if ($firstLine) { $SLACK_CHANNEL_ID = $firstLine.Trim() }
     }
 }
 
@@ -840,7 +881,12 @@ function Format-SlackMention {
 }
 
 function Notify-Slack {
-    if ($NO_SLACK -or [string]::IsNullOrWhiteSpace($SLACK_WEBHOOK_URL)) {
+    if ($NO_SLACK) { return }
+
+    $useWebhook = -not [string]::IsNullOrWhiteSpace($SLACK_WEBHOOK_URL)
+    $useBot = (-not $useWebhook) -and (-not [string]::IsNullOrWhiteSpace($SLACK_BOT_TOKEN)) -and (-not [string]::IsNullOrWhiteSpace($SLACK_CHANNEL_ID))
+
+    if (-not $useWebhook -and -not $useBot) {
         return
     }
 
@@ -923,11 +969,25 @@ function Notify-Slack {
         )
     }
 
+    if (-not [string]::IsNullOrWhiteSpace($SLACK_CHANNEL_ID)) {
+        $payloadObj["channel"] = $SLACK_CHANNEL_ID
+    }
+
     $payloadJson = $payloadObj | ConvertTo-Json -Depth 10 -Compress
     try {
         $bytes = [System.Text.Encoding]::UTF8.GetBytes($payloadJson)
-        Invoke-RestMethod -Uri $SLACK_WEBHOOK_URL -Method Post -ContentType "application/json; charset=utf-8" -Body $bytes | Out-Null
-        Write-Host "   ✅ Slack notification sent." -ForegroundColor Green
+        if ($useWebhook) {
+            Invoke-RestMethod -Uri $SLACK_WEBHOOK_URL -Method Post -ContentType "application/json; charset=utf-8" -Body $bytes | Out-Null
+            Write-Host "   ✅ Slack notification sent." -ForegroundColor Green
+        } elseif ($useBot) {
+            $headers = @{ Authorization = "Bearer $SLACK_BOT_TOKEN" }
+            $resp = Invoke-RestMethod -Uri "https://slack.com/api/chat.postMessage" -Method Post -Headers $headers -ContentType "application/json; charset=utf-8" -Body $bytes
+            if ($resp.ok) {
+                Write-Host "   ✅ Slack notification sent (channel: $SLACK_CHANNEL_ID)." -ForegroundColor Green
+            } else {
+                Write-Host "   ⚠️  WARNING: Failed to send Slack notification ($($resp.error))." -ForegroundColor Yellow
+            }
+        }
     } catch {
         Write-Host "   ⚠️  WARNING: Failed to send Slack notification ($($_.Exception.Message))." -ForegroundColor Yellow
     }
