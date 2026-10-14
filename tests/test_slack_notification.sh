@@ -32,20 +32,21 @@ SLACK_MENTION="here"
 
 PAYLOAD=$(build_slack_payload)
 
-python3 -c "
-import json, sys
-data = json.loads('''$PAYLOAD''')
-assert 'New Build Distributed: demo_app v1.2.3+45' in data['text']
-blocks = data['blocks']
-assert blocks[0]['type'] == 'header'
-assert 'demo_app v1.2.3+45' in blocks[0]['text']['text']
-fields = blocks[1]['fields']
+PAYLOAD="$PAYLOAD" python3 -c '
+import json, os
+data = json.loads(os.environ["PAYLOAD"])
+assert "New Build Distributed: demo_app v1.2.3+45" in data["text"]
+blocks = data["blocks"]
+assert blocks[0]["type"] == "header"
+assert "demo_app v1.2.3+45" in blocks[0]["text"]["text"]
+fields = blocks[1]["fields"]
 assert len(fields) == 4
-assert 'demo_app' in fields[0]['text']
-assert 'iOS (IPA)' in fields[1]['text']
-assert 'Firebase (groups: QA,PM), TestFlight' in fields[2]['text']
-assert '<!here>' in blocks[2]['text']['text']
-"
+assert "demo_app" in fields[0]["text"]
+assert "\n" in fields[0]["text"] and "\\n" not in fields[0]["text"]
+assert "iOS (IPA)" in fields[1]["text"]
+assert "Firebase (groups: QA,PM), TestFlight" in fields[2]["text"]
+assert "<!here>" in blocks[2]["text"]["text"]
+'
 echo "✅ Test 2 (build_slack_payload valid Block Kit JSON): PASS"
 
 # --- Test 3: notify_slack dry-run and --no-slack ---

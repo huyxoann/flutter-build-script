@@ -1169,12 +1169,13 @@ build_slack_payload() {
   git_author=$(git config user.name 2>/dev/null || true)
   [ -z "$git_author" ] && git_author="${USER:-unknown}"
 
+  local nl=$'\n'
   local header_text="🚀 New Build Distributed: $APP_NAME v${VERSION_NAME}+${BUILD_NUMBER}"
   local fallback_text="$header_text ($platform_label -> $dist_details)"
-  local app_ver_field="*App & Version:*\n\`$APP_NAME\` (\`v${VERSION_NAME}+${BUILD_NUMBER}\` • $BUILD_MODE)"
-  local plat_field="*Platform / Target:*\n$platform_label"
-  local dist_field="*Distributed To:*\n$dist_details"
-  local author_field="*Author & Branch:*\n$git_author (\`$git_branch\`)"
+  local app_ver_field="*App & Version:*${nl}\`$APP_NAME\` (\`v${VERSION_NAME}+${BUILD_NUMBER}\` • $BUILD_MODE)"
+  local plat_field="*Platform / Target:*${nl}$platform_label"
+  local dist_field="*Distributed To:*${nl}$dist_details"
+  local author_field="*Author & Branch:*${nl}$git_author (\`$git_branch\`)"
   local commit_field="*Commit:* \`$git_commit\`"
 
   if [ -n "$SLACK_MENTION" ]; then
