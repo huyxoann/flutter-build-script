@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.3.0] - 2026-10-23
+
+### Added
+- **`--no-obfuscate` CLI Flag**: Added flag to explicitly disable Dart symbol obfuscation for a single build when needed (supported in Bash & PowerShell).
+- **Crashlytics Symbol Upload Guide**: Added CLI instructions in `README.md` for uploading debug symbols via `firebase crashlytics:symbols:upload` and local stack trace de-obfuscation via `flutter symbolize`.
+
+### Changed
+- **Default Dart Obfuscation**: Enabled `--obfuscate` by default (`ENABLE_OBFUSCATE=true`) for `release` and `profile` builds (automatically disabled with a warning in `debug` mode).
+- **Persistent Debug Symbols Storage**: Moved `SYMBOLS_DIR` outside the project `build/` directory to `~/.config/build_script/symbols/<app_name>/` so debug symbols survive `flutter clean` across subsequent builds.
+
+---
+
 ## [1.2.0] - 2026-10-14
 
 ### Added

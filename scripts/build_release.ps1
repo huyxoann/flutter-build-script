@@ -27,7 +27,7 @@ Set-Location -Path $PROJECT_ROOT
 
 $APP_NAME = Split-Path $PROJECT_ROOT -Leaf
 $BUILD_DIR = "build\dist"
-$SYMBOLS_DIR = "$BUILD_DIR\symbols"
+$SYMBOLS_DIR = Join-Path $env:USERPROFILE ".config\build_script\symbols\$APP_NAME"
 $FASTLANE_WORK_DIR = "$BUILD_DIR\.fastlane"
 
 # ==========================================
@@ -35,7 +35,7 @@ $FASTLANE_WORK_DIR = "$BUILD_DIR\.fastlane"
 # ==========================================
 $TARGET = ""
 $BUILD_MODE = "release"
-$ENABLE_OBFUSCATE = $false
+$ENABLE_OBFUSCATE = $true
 $DISTRIBUTE_TARGETS = ""
 $PLATFORM = ""
 $PLAY_TRACK = "internal"
@@ -357,7 +357,8 @@ Slack Notification:
 
 Options:
   --setup                  Setup project credentials and .build_release.env
-  --obfuscate              Enable Dart symbol obfuscation (release/profile only)
+  --obfuscate              Enable Dart symbol obfuscation (release/profile only) [Default]
+  --no-obfuscate           Disable Dart symbol obfuscation
   --help, -h               Show this help message
 
 Examples:
@@ -404,6 +405,9 @@ while ($i -lt $args.Count) {
         }
         "^--obfuscate$" {
             $ENABLE_OBFUSCATE = $true; $i++; break
+        }
+        "^--no-obfuscate$" {
+            $ENABLE_OBFUSCATE = $false; $i++; break
         }
         "^--distribute$" {
             if ($i + 1 -lt $args.Count) { $DISTRIBUTE_TARGETS = $args[$i+1]; $i += 2 } else { Write-Host "❌ Missing value for --distribute" -ForegroundColor Red; exit 1 }; break

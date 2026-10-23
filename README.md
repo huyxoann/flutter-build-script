@@ -14,7 +14,7 @@ Supports **macOS**, **Linux**, and **Windows**.
 - **Clean Build Lifecycle**: `flutter clean` + `flutter pub get` before every build
 - **Multi-Target Build**: Android App Bundle (`.aab`), APK (`.apk`), iOS Archive (`.ipa`)
 - **Standardized Output**: Timestamped filenames in `build/dist/`
-- **Optional Obfuscation**: `--obfuscate` for Dart symbol obfuscation
+- **Default Obfuscation**: Dart symbol obfuscation enabled by default for release/profile (`--no-obfuscate` to disable)
 - **Distribution via Fastlane**: Ship to Firebase, Google Play, and TestFlight in one command
 - **Auto-Bootstrap Fastlane**: Temp config generated on the fly — no files added to your project
 - **Multi-Target Distribution**: e.g., `--distribute firebase,appstore` in one run
@@ -136,8 +136,8 @@ When you run `build_release --setup` in any project, it automatically links to t
 build_release                         # Android App Bundle (.aab) — default
 build_release apk                     # Android APK
 build_release ipa                     # iOS IPA (macOS only)
-build_release apk --debug             # Debug APK
-build_release appbundle --obfuscate   # With Dart obfuscation
+build_release apk --debug              # Debug APK
+build_release appbundle --no-obfuscate # Disable Dart obfuscation
 ```
 
 ### Build & Distribute
@@ -189,7 +189,8 @@ build_release --distribute appstore --distribute-only
 | `release`, `--release` | Mode | Release build | ✅ Yes |
 | `profile`, `--profile` | Mode | Profile build | ❌ No |
 | `debug`, `--debug` | Mode | Debug build | ❌ No |
-| `--obfuscate` | Flag | Dart obfuscation & debug symbol export | ❌ No |
+| `--obfuscate` | Flag | Dart obfuscation & debug symbol export | ✅ Yes |
+| `--no-obfuscate` | Flag | Disable Dart obfuscation | ❌ No |
 | `--build-number <num>`, `-b <num>` | Option | Explicit build number (overrides auto-detection) | _(none)_ |
 | `--skip-store-version` | Flag | Skip querying Google Play / App Store for latest build number | ❌ No |
 
@@ -243,17 +244,31 @@ build/dist/
 ├── <app_name>_v0.1.0_b124_20260825_1030.aab          # Release artifact
 ├── <app_name>_debug_v0.1.0_b124_20260825_1035.apk    # Debug artifact
 ├── <app_name>_v0.1.0_b124_20260825_1040.ipa           # iOS artifact (macOS only)
-├── symbols/                                            # (--obfuscate only)
-│   └── symbols_v0.1.0_b124_20260825_1030/
 └── .fastlane/                                          # Auto-generated, cleaned by flutter clean
     ├── Gemfile
     ├── vendor/
     └── fastlane/
         ├── Fastfile
         └── Pluginfile
+
+~/.config/build_script/symbols/<app_name>/              # Obfuscation debug symbols (survives flutter clean)
+└── symbols_v0.1.0_b124_20260825_1030/
 ```
 
-Running `flutter clean` wipes everything in `build/`, including artifacts and Fastlane cache.
+Running `flutter clean` wipes everything in `build/`, including artifacts and Fastlane cache, while debug symbols in `~/.config/build_script/symbols/` are preserved.
+
+> **💡 Uploading Debug Symbols to Firebase Crashlytics (CLI):**
+> To de-obfuscate stack traces in Firebase Crashlytics, upload the generated symbols directory using the Firebase CLI:
+> ```bash
+> firebase crashlytics:symbols:upload \
+>   --app="<FIREBASE_APP_ID>" \
+>   ~/.config/build_script/symbols/<app_name>/symbols_v0.1.0_b124_20260825_1030
+> ```
+> Or de-obfuscate a stack trace locally with Flutter CLI:
+> ```bash
+> flutter symbolize -i <stack_trace_file> \
+>   -d ~/.config/build_script/symbols/<app_name>/symbols_v0.1.0_b124_20260825_1030/app.android-arm64.symbols
+> ```
 
 ---
 

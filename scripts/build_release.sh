@@ -29,7 +29,7 @@ cd "$PROJECT_ROOT"
 
 APP_NAME="$(basename "$PROJECT_ROOT")"
 BUILD_DIR="build/dist"
-SYMBOLS_DIR="$BUILD_DIR/symbols"
+SYMBOLS_DIR="$HOME/.config/build_script/symbols/$APP_NAME"
 FASTLANE_WORK_DIR="$BUILD_DIR/.fastlane"
 
 # ==========================================
@@ -37,7 +37,7 @@ FASTLANE_WORK_DIR="$BUILD_DIR/.fastlane"
 # ==========================================
 TARGET=""
 BUILD_MODE="release"
-ENABLE_OBFUSCATE=false
+ENABLE_OBFUSCATE=true
 DISTRIBUTE_TARGETS=""
 PLATFORM=""
 PLAY_TRACK="internal"
@@ -115,7 +115,8 @@ Options:
   --build-number <num>, -b <num>  Set build number manually (overrides auto-detection)
   --skip-store-version            Skip checking Google Play / App Store for latest build number
   --setup                         Initialize .build_release.env and .gitignore in current project
-  --obfuscate                     Enable Dart symbol obfuscation (release/profile only)
+  --obfuscate                     Enable Dart symbol obfuscation (release/profile only) [Default]
+  --no-obfuscate                  Disable Dart symbol obfuscation
   --help, -h                      Show this help message
 
 Examples:
@@ -616,6 +617,8 @@ while [[ $# -gt 0 ]]; do
       BUILD_MODE="debug"; shift ;;
     --obfuscate)
       ENABLE_OBFUSCATE=true; shift ;;
+    --no-obfuscate)
+      ENABLE_OBFUSCATE=false; shift ;;
     --distribute)
       DISTRIBUTE_TARGETS="$2"; shift 2 ;;
     --distribute=*)
