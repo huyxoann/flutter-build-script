@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.0] - 2026-11-03
+
+### Fixed
+- **Windows PowerShell 5.1 Encoding & Parser Compatibility**:
+  - Replaced raw multi-byte UTF-8 emojis and punctuation (`—`, `→`, `•`) in `setup.ps1`, `install.ps1`, and `scripts/build_release.ps1` with pure 7-bit ASCII status prefixes (`[OK]`, `[INFO]`, `[WARN]`, `[ERROR]`, `-`, `->`) to prevent Windows-1252 smart-quote collisions (`0x93` / `0x94` $\rightarrow$ `“` / `”`) that caused `TerminatorExpectedAtEndOfString` / `Missing closing '}'` parser errors on Windows PowerShell 5.1.
+  - Preserved Unicode symbols in Slack Block Kit notifications on Windows by constructing `🚀` and `•` dynamically at runtime via `[char]::ConvertFromUtf32(0x1F680)` and `[char]0x2022`.
+  - Explicitly wrote `build_release.cmd` wrapper using `-Encoding ASCII` in `install.ps1` so `cmd.exe` never encounters a UTF-8 BOM.
+  - Added `git reset --hard HEAD --quiet` before `git pull` in `setup.ps1` (matching `setup.sh`) so existing Windows installations update cleanly.
+
+### Added
+- **PowerShell Encoding Self-Check**: Added `tests/test_powershell_encoding.sh` to verify all `.ps1` scripts remain pure 7-bit ASCII with balanced braces.
+
+---
+
 ## [1.3.0] - 2026-10-23
 
 ### Added

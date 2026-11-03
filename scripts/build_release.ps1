@@ -19,7 +19,7 @@ if (Test-Path (Join-Path $SCRIPT_PARENT "pubspec.yaml")) {
 }
 
 if (-not (Test-Path (Join-Path $PROJECT_ROOT "pubspec.yaml"))) {
-    Write-Host "❌ No pubspec.yaml found in $PROJECT_ROOT" -ForegroundColor Red
+    Write-Host "[ERROR] No pubspec.yaml found in $PROJECT_ROOT" -ForegroundColor Red
     Write-Host "   Run this command from the root of a Flutter project." -ForegroundColor Red
     exit 1
 }
@@ -89,12 +89,12 @@ if (Test-Path ".build_release.env") {
 # PROJECT SETUP
 # ==========================================
 function Run-Setup {
-    Write-Host "⚙️  Setting up project for build_release..." -ForegroundColor Cyan
+    Write-Host "[SETUP] Setting up project for build_release..." -ForegroundColor Cyan
     Write-Host ""
 
     # --- .build_release.env ---
     if (Test-Path ".build_release.env") {
-        Write-Host "⚠️  .build_release.env already exists." -ForegroundColor Yellow
+        Write-Host "[WARN] .build_release.env already exists." -ForegroundColor Yellow
         $ans = Read-Host "Overwrite? (y/N)"
         if ($ans -notmatch "^[Yy]$") {
             Write-Host "   Skipped .build_release.env"
@@ -110,17 +110,17 @@ function Run-Setup {
         $gitignore = Get-Content ".gitignore"
         if ($gitignore -notcontains ".build_release.env") {
             Add-Content ".gitignore" "`n# Build release config (contains secrets)`n.build_release.env"
-            Write-Host "✅ Added .build_release.env to .gitignore" -ForegroundColor Green
+            Write-Host "[OK] Added .build_release.env to .gitignore" -ForegroundColor Green
         } else {
-            Write-Host "ℹ️  .build_release.env already in .gitignore" -ForegroundColor Cyan
+            Write-Host "[INFO] .build_release.env already in .gitignore" -ForegroundColor Cyan
         }
     } else {
         Set-Content ".gitignore" "# Build release config (contains secrets)`n.build_release.env"
-        Write-Host "✅ Created .gitignore with .build_release.env" -ForegroundColor Green
+        Write-Host "[OK] Created .gitignore with .build_release.env" -ForegroundColor Green
     }
 
     Write-Host ""
-    Write-Host "🚀 Setup complete! Next steps:" -ForegroundColor Cyan
+    Write-Host "[READY] Setup complete! Next steps:" -ForegroundColor Cyan
     Write-Host "   1. Edit .build_release.env with your credentials"
     Write-Host "   2. Run: .\build_release.ps1 --distribute firebase --platform android"
     exit 0
@@ -248,9 +248,9 @@ function Create-EnvFile {
     Detect-AndroidPackageName
     $envTemplate = @"
 # ==========================================
-# .build_release.env — Project Build & Distribution Config
+# .build_release.env - Project Build & Distribution Config
 # ==========================================
-# ⚠️  Do NOT commit this file — it contains secrets!
+# WARNING: Do NOT commit this file - it contains secrets!
 
 # === Firebase App Distribution ===
 # App IDs from Firebase Console > Project Settings > General > Your apps
@@ -274,7 +274,7 @@ ANDROID_PACKAGE_NAME=$script:_DetectedAndroidPackage
 # Create at: Google Cloud Console > IAM > Service Accounts
 GOOGLE_PLAY_JSON_KEY=$script:_DetectedGplayKey
 
-# === App Store Connect (API Key — macOS only) ===
+# === App Store Connect (API Key - macOS only) ===
 # Create at: App Store Connect > Users and Access > Integrations
 ASC_KEY_ID=$script:_DetectedAscKeyId
 ASC_ISSUER_ID=
@@ -296,29 +296,29 @@ SLACK_CHANNEL_ID=$script:_DetectedSlackChannelId
 SLACK_MENTION=
 "@
     Set-Content -Path ".build_release.env" -Value $envTemplate -Encoding UTF8
-    Write-Host "✅ Created .build_release.env" -ForegroundColor Green
+    Write-Host "[OK] Created .build_release.env" -ForegroundColor Green
 
     if (-not [string]::IsNullOrEmpty($script:_DetectedAndroidId) -or -not [string]::IsNullOrEmpty($script:_DetectedIosId)) {
-        Write-Host "   🔍 Auto-detected Firebase App IDs:" -ForegroundColor Cyan
+        Write-Host "   [AUTO] Auto-detected Firebase App IDs:" -ForegroundColor Cyan
         if (-not [string]::IsNullOrEmpty($script:_DetectedAndroidId)) { Write-Host "      Android: $script:_DetectedAndroidId" -ForegroundColor Cyan }
         if (-not [string]::IsNullOrEmpty($script:_DetectedIosId)) { Write-Host "      iOS:     $script:_DetectedIosId" -ForegroundColor Cyan }
     }
     if (-not [string]::IsNullOrEmpty($script:_DetectedAndroidPackage)) {
-        Write-Host "   🔍 Auto-detected Android Package: $script:_DetectedAndroidPackage" -ForegroundColor Cyan
+        Write-Host "   [AUTO] Auto-detected Android Package: $script:_DetectedAndroidPackage" -ForegroundColor Cyan
     }
     if (-not [string]::IsNullOrEmpty($script:_DetectedGplayKey)) {
-        Write-Host "   🔍 Auto-detected Google Play key: $script:_DetectedGplayKey" -ForegroundColor Cyan
+        Write-Host "   [AUTO] Auto-detected Google Play key: $script:_DetectedGplayKey" -ForegroundColor Cyan
     }
     if (-not [string]::IsNullOrEmpty($script:_DetectedAscKeyFile)) {
-        Write-Host "   🔍 Auto-detected App Store key: $script:_DetectedAscKeyFile" -ForegroundColor Cyan
+        Write-Host "   [AUTO] Auto-detected App Store key: $script:_DetectedAscKeyFile" -ForegroundColor Cyan
         if (-not [string]::IsNullOrEmpty($script:_DetectedAscKeyId)) {
             Write-Host "      Key ID: $script:_DetectedAscKeyId" -ForegroundColor Cyan
         }
     }
     if (-not [string]::IsNullOrEmpty($script:_DetectedSlackWebhook)) {
-        Write-Host "   🔍 Auto-detected Slack webhook from ~/.config/slack/webhook_url" -ForegroundColor Cyan
+        Write-Host "   [AUTO] Auto-detected Slack webhook from ~/.config/slack/webhook_url" -ForegroundColor Cyan
     } elseif (-not [string]::IsNullOrEmpty($script:_DetectedSlackBotToken)) {
-        Write-Host "   🔍 Auto-detected Slack Bot Token from ~/.config/slack/bot_token (Channel: $script:_DetectedSlackChannelId)" -ForegroundColor Cyan
+        Write-Host "   [AUTO] Auto-detected Slack Bot Token from ~/.config/slack/bot_token (Channel: $script:_DetectedSlackChannelId)" -ForegroundColor Cyan
     }
 }
 
@@ -379,7 +379,7 @@ Examples:
 
 Config:
   Create .build_release.env at your project root (see .build_release.env.example).
-  Add .build_release.env to .gitignore — it contains secrets.
+  Add .build_release.env to .gitignore - it contains secrets.
 "@ | Write-Host
     exit 0
 }
@@ -410,37 +410,37 @@ while ($i -lt $args.Count) {
             $ENABLE_OBFUSCATE = $false; $i++; break
         }
         "^--distribute$" {
-            if ($i + 1 -lt $args.Count) { $DISTRIBUTE_TARGETS = $args[$i+1]; $i += 2 } else { Write-Host "❌ Missing value for --distribute" -ForegroundColor Red; exit 1 }; break
+            if ($i + 1 -lt $args.Count) { $DISTRIBUTE_TARGETS = $args[$i+1]; $i += 2 } else { Write-Host "[ERROR] Missing value for --distribute" -ForegroundColor Red; exit 1 }; break
         }
         "^--distribute=(.*)$" {
             $DISTRIBUTE_TARGETS = $Matches[1]; $i++; break
         }
         "^--platform$" {
-            if ($i + 1 -lt $args.Count) { $PLATFORM = $args[$i+1]; $i += 2 } else { Write-Host "❌ Missing value for --platform" -ForegroundColor Red; exit 1 }; break
+            if ($i + 1 -lt $args.Count) { $PLATFORM = $args[$i+1]; $i += 2 } else { Write-Host "[ERROR] Missing value for --platform" -ForegroundColor Red; exit 1 }; break
         }
         "^--platform=(.*)$" {
             $PLATFORM = $Matches[1]; $i++; break
         }
         "^--track$" {
-            if ($i + 1 -lt $args.Count) { $PLAY_TRACK = $args[$i+1]; $i += 2 } else { Write-Host "❌ Missing value for --track" -ForegroundColor Red; exit 1 }; break
+            if ($i + 1 -lt $args.Count) { $PLAY_TRACK = $args[$i+1]; $i += 2 } else { Write-Host "[ERROR] Missing value for --track" -ForegroundColor Red; exit 1 }; break
         }
         "^--track=(.*)$" {
             $PLAY_TRACK = $Matches[1]; $i++; break
         }
         "^--package-name$" {
-            if ($i + 1 -lt $args.Count) { $ANDROID_PACKAGE_NAME = $args[$i+1]; $i += 2 } else { Write-Host "❌ Missing value for --package-name" -ForegroundColor Red; exit 1 }; break
+            if ($i + 1 -lt $args.Count) { $ANDROID_PACKAGE_NAME = $args[$i+1]; $i += 2 } else { Write-Host "[ERROR] Missing value for --package-name" -ForegroundColor Red; exit 1 }; break
         }
         "^--package-name=(.*)$" {
             $ANDROID_PACKAGE_NAME = $Matches[1]; $i++; break
         }
         "^--groups$" {
-            if ($i + 1 -lt $args.Count) { $DIST_GROUPS = $args[$i+1]; $i += 2 } else { Write-Host "❌ Missing value for --groups" -ForegroundColor Red; exit 1 }; break
+            if ($i + 1 -lt $args.Count) { $DIST_GROUPS = $args[$i+1]; $i += 2 } else { Write-Host "[ERROR] Missing value for --groups" -ForegroundColor Red; exit 1 }; break
         }
         "^--groups=(.*)$" {
             $DIST_GROUPS = $Matches[1]; $i++; break
         }
         "^--notes$" {
-            if ($i + 1 -lt $args.Count) { $DIST_NOTES = $args[$i+1]; $i += 2 } else { Write-Host "❌ Missing value for --notes" -ForegroundColor Red; exit 1 }; break
+            if ($i + 1 -lt $args.Count) { $DIST_NOTES = $args[$i+1]; $i += 2 } else { Write-Host "[ERROR] Missing value for --notes" -ForegroundColor Red; exit 1 }; break
         }
         "^--notes=(.*)$" {
             $DIST_NOTES = $Matches[1]; $i++; break
@@ -452,25 +452,25 @@ while ($i -lt $args.Count) {
             $DRY_RUN = $true; $i++; break
         }
         "^(--build-number|-b)$" {
-            if ($i + 1 -lt $args.Count) { $BUILD_NUMBER_OVERRIDE = $args[$i+1]; $i += 2 } else { Write-Host "❌ Missing value for --build-number" -ForegroundColor Red; exit 1 }; break
+            if ($i + 1 -lt $args.Count) { $BUILD_NUMBER_OVERRIDE = $args[$i+1]; $i += 2 } else { Write-Host "[ERROR] Missing value for --build-number" -ForegroundColor Red; exit 1 }; break
         }
         "^--build-number=(.*)$" {
             $BUILD_NUMBER_OVERRIDE = $Matches[1]; $i++; break
         }
         "^--slack-webhook$" {
-            if ($i + 1 -lt $args.Count) { $SLACK_WEBHOOK_CLI = $args[$i+1]; $i += 2 } else { Write-Host "❌ Missing value for --slack-webhook" -ForegroundColor Red; exit 1 }; break
+            if ($i + 1 -lt $args.Count) { $SLACK_WEBHOOK_CLI = $args[$i+1]; $i += 2 } else { Write-Host "[ERROR] Missing value for --slack-webhook" -ForegroundColor Red; exit 1 }; break
         }
         "^--slack-webhook=(.*)$" {
             $SLACK_WEBHOOK_CLI = $Matches[1]; $i++; break
         }
         "^--slack-channel$" {
-            if ($i + 1 -lt $args.Count) { $SLACK_CHANNEL_CLI = $args[$i+1]; $i += 2 } else { Write-Host "❌ Missing value for --slack-channel" -ForegroundColor Red; exit 1 }; break
+            if ($i + 1 -lt $args.Count) { $SLACK_CHANNEL_CLI = $args[$i+1]; $i += 2 } else { Write-Host "[ERROR] Missing value for --slack-channel" -ForegroundColor Red; exit 1 }; break
         }
         "^--slack-channel=(.*)$" {
             $SLACK_CHANNEL_CLI = $Matches[1]; $i++; break
         }
         "^--slack-mention$" {
-            if ($i + 1 -lt $args.Count) { $SLACK_MENTION_CLI = $args[$i+1]; $i += 2 } else { Write-Host "❌ Missing value for --slack-mention" -ForegroundColor Red; exit 1 }; break
+            if ($i + 1 -lt $args.Count) { $SLACK_MENTION_CLI = $args[$i+1]; $i += 2 } else { Write-Host "[ERROR] Missing value for --slack-mention" -ForegroundColor Red; exit 1 }; break
         }
         "^--slack-mention=(.*)$" {
             $SLACK_MENTION_CLI = $Matches[1]; $i++; break
@@ -485,7 +485,7 @@ while ($i -lt $args.Count) {
             Show-Help
         }
         default {
-            Write-Host "❌ Unknown argument: $arg" -ForegroundColor Red
+            Write-Host "[ERROR] Unknown argument: $arg" -ForegroundColor Red
             Write-Host "Run '.\build_release.ps1 --help' for usage." -ForegroundColor Red
             exit 1
         }
@@ -543,11 +543,11 @@ if (-not [string]::IsNullOrEmpty($DISTRIBUTE_TARGETS)) {
             "firebase"  { $DIST_FIREBASE = $true }
             "playstore" { $DIST_PLAYSTORE = $true }
             "appstore"  { 
-                Write-Host "❌ iOS builds are not supported on Windows. Use macOS." -ForegroundColor Red
+                Write-Host "[ERROR] iOS builds are not supported on Windows. Use macOS." -ForegroundColor Red
                 exit 1 
             }
             default {
-                Write-Host "❌ Unknown distribute target: $dist" -ForegroundColor Red
+                Write-Host "[ERROR] Unknown distribute target: $dist" -ForegroundColor Red
                 Write-Host "   Valid targets: firebase, playstore" -ForegroundColor Red
                 exit 1
             }
@@ -556,24 +556,24 @@ if (-not [string]::IsNullOrEmpty($DISTRIBUTE_TARGETS)) {
 }
 
 if ($TARGET -eq "ipa") {
-    Write-Host "❌ iOS builds are not supported on Windows. Use macOS." -ForegroundColor Red
+    Write-Host "[ERROR] iOS builds are not supported on Windows. Use macOS." -ForegroundColor Red
     exit 1
 }
 
 if ($DISTRIBUTE_ONLY -and -not $HAS_DISTRIBUTE) {
-    Write-Host "❌ --distribute-only requires --distribute <targets>." -ForegroundColor Red
+    Write-Host "[ERROR] --distribute-only requires --distribute <targets>." -ForegroundColor Red
     exit 1
 }
 
 # Validate --platform value
 if (-not [string]::IsNullOrEmpty($PLATFORM) -and $PLATFORM -ne "android" -and $PLATFORM -ne "ios") {
-    Write-Host "❌ Invalid platform: $PLATFORM" -ForegroundColor Red
+    Write-Host "[ERROR] Invalid platform: $PLATFORM" -ForegroundColor Red
     Write-Host "   Valid values: android" -ForegroundColor Red
     exit 1
 }
 
 if ($PLATFORM -eq "ios") {
-    Write-Host "❌ iOS builds are not supported on Windows. Use macOS." -ForegroundColor Red
+    Write-Host "[ERROR] iOS builds are not supported on Windows. Use macOS." -ForegroundColor Red
     exit 1
 }
 
@@ -583,7 +583,7 @@ if ($HAS_DISTRIBUTE -and [string]::IsNullOrEmpty($TARGET)) {
 
     if ($DIST_FIREBASE) {
         if ([string]::IsNullOrEmpty($PLATFORM)) {
-            Write-Host "❌ --platform android is required when distributing to firebase." -ForegroundColor Red
+            Write-Host "[ERROR] --platform android is required when distributing to firebase." -ForegroundColor Red
             exit 1
         }
         if ($PLATFORM -eq "android") {
@@ -593,7 +593,7 @@ if ($HAS_DISTRIBUTE -and [string]::IsNullOrEmpty($TARGET)) {
 
     if ($DIST_PLAYSTORE) {
         if (-not [string]::IsNullOrEmpty($INFERRED_TARGET) -and $INFERRED_TARGET -eq "apk") {
-            Write-Host "❌ Cannot combine firebase (android → apk) with playstore (→ appbundle) in one run." -ForegroundColor Red
+            Write-Host "[ERROR] Cannot combine firebase (android -> apk) with playstore (-> appbundle) in one run." -ForegroundColor Red
             Write-Host "   Run them separately." -ForegroundColor Red
             exit 1
         }
@@ -622,19 +622,19 @@ function Check-Dependencies {
     $missing = $false
 
     if (-not (Get-Command ruby -ErrorAction SilentlyContinue)) {
-        Write-Host "❌ Ruby is not installed." -ForegroundColor Red
+        Write-Host "[ERROR] Ruby is not installed." -ForegroundColor Red
         Write-Host "   Install with: choco install ruby" -ForegroundColor Red
         $missing = $true
     }
 
     if (-not (Get-Command bundle -ErrorAction SilentlyContinue)) {
-        Write-Host "❌ Bundler is not installed." -ForegroundColor Red
+        Write-Host "[ERROR] Bundler is not installed." -ForegroundColor Red
         Write-Host "   Install with: gem install bundler" -ForegroundColor Red
         $missing = $true
     }
 
     if (-not (Get-Command fastlane -ErrorAction SilentlyContinue)) {
-        Write-Host "❌ Fastlane is not installed." -ForegroundColor Red
+        Write-Host "[ERROR] Fastlane is not installed." -ForegroundColor Red
         Write-Host "   Install with: gem install fastlane" -ForegroundColor Red
         $missing = $true
     }
@@ -650,11 +650,11 @@ function Validate-Credentials {
 
     if ($DIST_FIREBASE) {
         if ($PLATFORM -eq "android" -and [string]::IsNullOrEmpty($FIREBASE_APP_ID_ANDROID)) {
-            Write-Host "❌ Missing: FIREBASE_APP_ID_ANDROID" -ForegroundColor Red
+            Write-Host "[ERROR] Missing: FIREBASE_APP_ID_ANDROID" -ForegroundColor Red
             $valid = $false
         }
         if ([string]::IsNullOrEmpty($FIREBASE_CLI_TOKEN)) {
-            Write-Host "❌ Missing: FIREBASE_CLI_TOKEN" -ForegroundColor Red
+            Write-Host "[ERROR] Missing: FIREBASE_CLI_TOKEN" -ForegroundColor Red
             Write-Host "   Generate with: firebase login:ci" -ForegroundColor Red
             $valid = $false
         }
@@ -662,17 +662,17 @@ function Validate-Credentials {
 
     if ($DIST_PLAYSTORE) {
         if ([string]::IsNullOrWhiteSpace($ANDROID_PACKAGE_NAME)) {
-            Write-Host "❌ Could not detect Android package name (applicationId)." -ForegroundColor Red
+            Write-Host "[ERROR] Could not detect Android package name (applicationId)." -ForegroundColor Red
             Write-Host "   Please set ANDROID_PACKAGE_NAME in .build_release.env or pass --package-name <pkg>" -ForegroundColor Red
             $valid = $false
         }
         if ([string]::IsNullOrEmpty($GOOGLE_PLAY_JSON_KEY)) {
-            Write-Host "❌ Missing: GOOGLE_PLAY_JSON_KEY" -ForegroundColor Red
+            Write-Host "[ERROR] Missing: GOOGLE_PLAY_JSON_KEY" -ForegroundColor Red
             $valid = $false
         } else {
             $resolved_key = $GOOGLE_PLAY_JSON_KEY
             if (-not (Test-Path $resolved_key)) {
-                Write-Host "❌ Google Play JSON key file not found: $resolved_key" -ForegroundColor Red
+                Write-Host "[ERROR] Google Play JSON key file not found: $resolved_key" -ForegroundColor Red
                 $valid = $false
             }
         }
@@ -683,12 +683,12 @@ function Validate-Credentials {
         $keyProps = "android\key.properties"
         if (-not (Test-Path $keyProps)) {
             if ($DIST_PLAYSTORE) {
-                Write-Host "❌ Android signing not configured: $keyProps not found." -ForegroundColor Red
+                Write-Host "[ERROR] Android signing not configured: $keyProps not found." -ForegroundColor Red
                 Write-Host "   Release builds without signing will be rejected by Google Play." -ForegroundColor Red
                 Write-Host "   See: https://docs.flutter.dev/deployment/android#sign-the-app" -ForegroundColor Red
                 $valid = $false
             } elseif ($DIST_FIREBASE) {
-                Write-Host "⚠️  No $keyProps found — APK will be signed with debug key." -ForegroundColor Yellow
+                Write-Host "[WARN] No $keyProps found - APK will be signed with debug key." -ForegroundColor Yellow
                 Write-Host "   This is OK for Firebase, but not for Play Store." -ForegroundColor Yellow
             }
         } else {
@@ -713,7 +713,7 @@ function Validate-Credentials {
                     }
                 }
                 if (-not $found) {
-                    Write-Host "❌ Keystore file not found: $storeFile (checked android\app\, android\) (from $keyProps)" -ForegroundColor Red
+                    Write-Host "[ERROR] Keystore file not found: $storeFile (checked android\app\, android\) (from $keyProps)" -ForegroundColor Red
                     $valid = $false
                 }
             }
@@ -730,7 +730,7 @@ function Validate-Credentials {
 # FASTLANE BOOTSTRAP
 # ==========================================
 function Setup-Fastlane {
-    Write-Host "⚙️  Setting up Fastlane environment..." -ForegroundColor Cyan
+    Write-Host "[SETUP] Setting up Fastlane environment..." -ForegroundColor Cyan
     $fastlaneDir = Join-Path $FASTLANE_WORK_DIR "fastlane"
     New-Item -ItemType Directory -Force -Path $fastlaneDir | Out-Null
 
@@ -754,7 +754,7 @@ eval_gemfile(plugins_path) if File.exist?(plugins_path)
 
     # --- Fastfile ---
     $fastfileContent = @"
-# Auto-generated by build_release.ps1 — do not edit manually.
+# Auto-generated by build_release.ps1 - do not edit manually.
 
 default_platform(:android)
 
@@ -787,7 +787,7 @@ end
     Set-Content -Path (Join-Path $fastlaneDir "Fastfile") -Value $fastfileContent -Encoding UTF8
 
     # --- Install gems ---
-    Write-Host "📦 Installing Fastlane dependencies (this may take a moment on first run)..." -ForegroundColor Cyan
+    Write-Host "[INFO] Installing Fastlane dependencies (this may take a moment on first run)..." -ForegroundColor Cyan
     Push-Location $FASTLANE_WORK_DIR
     try {
         bundle config set --local path vendor/bundle 2>$null
@@ -821,7 +821,7 @@ function Distribute-ToFirebase {
     $app_id = $FIREBASE_APP_ID_ANDROID
     $artifact_type = "apk"
 
-    Write-Host "`n🔥 Firebase App Distribution"
+    Write-Host "`n[FIREBASE] Firebase App Distribution"
     Write-Host "   App ID    : $app_id"
     Write-Host "   Platform  : $PLATFORM"
     Write-Host "   Artifact  : $ArtifactPath"
@@ -829,7 +829,7 @@ function Distribute-ToFirebase {
     if (-not [string]::IsNullOrEmpty($DIST_NOTES)) { Write-Host "   Notes     : $DIST_NOTES" }
 
     if ($DRY_RUN) {
-        Write-Host "   🏃 DRY RUN — upload skipped." -ForegroundColor Yellow
+        Write-Host "   [DRY-RUN] DRY RUN - upload skipped." -ForegroundColor Yellow
         return
     }
 
@@ -842,7 +842,7 @@ function Distribute-ToFirebase {
         "firebase_cli_token:$FIREBASE_CLI_TOKEN"
     )
 
-    Write-Host "   ✅ Firebase distribution complete." -ForegroundColor Green
+    Write-Host "   [OK] Firebase distribution complete." -ForegroundColor Green
 }
 
 function Distribute-ToPlaystore {
@@ -851,13 +851,13 @@ function Distribute-ToPlaystore {
     $abs_path = $abs_path -replace '\\', '/'
     $resolved_key = $GOOGLE_PLAY_JSON_KEY -replace '\\', '/'
 
-    Write-Host "`n🏪 Google Play Store"
+    Write-Host "`n[PLAYSTORE] Google Play Store"
     Write-Host "   Track     : $PLAY_TRACK"
     Write-Host "   Package   : $ANDROID_PACKAGE_NAME"
     Write-Host "   Artifact  : $ArtifactPath"
 
     if ($DRY_RUN) {
-        Write-Host "   🏃 DRY RUN — upload skipped." -ForegroundColor Yellow
+        Write-Host "   [DRY-RUN] DRY RUN - upload skipped." -ForegroundColor Yellow
         return
     }
 
@@ -868,7 +868,7 @@ function Distribute-ToPlaystore {
         "track:$PLAY_TRACK"
     )
 
-    Write-Host "   ✅ Play Store upload complete." -ForegroundColor Green
+    Write-Host "   [OK] Play Store upload complete." -ForegroundColor Green
 }
 
 # ==========================================
@@ -894,10 +894,10 @@ function Notify-Slack {
         return
     }
 
-    Write-Host "`n💬 Slack Notification"
+    Write-Host "`n[SLACK] Slack Notification"
 
     if ($DRY_RUN) {
-        Write-Host "   🏃 DRY RUN — Slack notification skipped." -ForegroundColor Yellow
+        Write-Host "   [DRY-RUN] DRY RUN - Slack notification skipped." -ForegroundColor Yellow
         return
     }
 
@@ -930,9 +930,11 @@ function Notify-Slack {
         $gitAuthor = if (-not [string]::IsNullOrWhiteSpace($env:USERNAME)) { $env:USERNAME } else { "unknown" }
     }
 
-    $headerText = "🚀 New Build Distributed: $APP_NAME v${VERSION_NAME}+${BUILD_NUMBER}"
+    $rocketEmoji = [char]::ConvertFromUtf32(0x1F680)
+    $bulletChar = [char]0x2022
+    $headerText = "$rocketEmoji New Build Distributed: $APP_NAME v${VERSION_NAME}+${BUILD_NUMBER}"
     $fallbackText = "$headerText ($platformLabel -> $distDetails)"
-    $appVerField = "*App & Version:*`n``$APP_NAME`` (``v${VERSION_NAME}+${BUILD_NUMBER}`` • $BUILD_MODE)"
+    $appVerField = "*App & Version:*`n``$APP_NAME`` (``v${VERSION_NAME}+${BUILD_NUMBER}`` $bulletChar $BUILD_MODE)"
     $platField = "*Platform / Target:*`n$platformLabel"
     $distField = "*Distributed To:*`n$distDetails"
     $authorField = "*Author & Branch:*`n$gitAuthor (``$gitBranch``)"
@@ -940,7 +942,7 @@ function Notify-Slack {
 
     if (-not [string]::IsNullOrWhiteSpace($SLACK_MENTION)) {
         $formattedMention = Format-SlackMention -Mention $SLACK_MENTION
-        $commitField = "$commitField  •  *CC:* $formattedMention"
+        $commitField = "$commitField  $bulletChar  *CC:* $formattedMention"
     }
 
     $payloadObj = @{
@@ -982,18 +984,18 @@ function Notify-Slack {
         $bytes = [System.Text.Encoding]::UTF8.GetBytes($payloadJson)
         if ($useWebhook) {
             Invoke-RestMethod -Uri $SLACK_WEBHOOK_URL -Method Post -ContentType "application/json; charset=utf-8" -Body $bytes | Out-Null
-            Write-Host "   ✅ Slack notification sent." -ForegroundColor Green
+            Write-Host "   [OK] Slack notification sent." -ForegroundColor Green
         } elseif ($useBot) {
             $headers = @{ Authorization = "Bearer $SLACK_BOT_TOKEN" }
             $resp = Invoke-RestMethod -Uri "https://slack.com/api/chat.postMessage" -Method Post -Headers $headers -ContentType "application/json; charset=utf-8" -Body $bytes
             if ($resp.ok) {
-                Write-Host "   ✅ Slack notification sent (channel: $SLACK_CHANNEL_ID)." -ForegroundColor Green
+                Write-Host "   [OK] Slack notification sent (channel: $SLACK_CHANNEL_ID)." -ForegroundColor Green
             } else {
-                Write-Host "   ⚠️  WARNING: Failed to send Slack notification ($($resp.error))." -ForegroundColor Yellow
+                Write-Host "   [WARN] WARNING: Failed to send Slack notification ($($resp.error))." -ForegroundColor Yellow
             }
         }
     } catch {
-        Write-Host "   ⚠️  WARNING: Failed to send Slack notification ($($_.Exception.Message))." -ForegroundColor Yellow
+        Write-Host "   [WARN] WARNING: Failed to send Slack notification ($($_.Exception.Message))." -ForegroundColor Yellow
     }
 }
 
@@ -1006,10 +1008,10 @@ else { $TOTAL_STEPS = 4 }
 
 $script:CURRENT_STEP = 0
 function Step {
-    param([string]$Emoji, [string]$Message)
+    param([string]$Label, [string]$Message)
     $script:CURRENT_STEP += 1
     Write-Host ""
-    Write-Host "$Emoji [$script:CURRENT_STEP/$TOTAL_STEPS] $Message" -ForegroundColor Cyan
+    Write-Host "$Label [$script:CURRENT_STEP/$TOTAL_STEPS] $Message" -ForegroundColor Cyan
 }
 
 # ==========================================
@@ -1017,15 +1019,15 @@ function Step {
 # ==========================================
 try {
     if ($DISTRIBUTE_ONLY) {
-        Write-Host "🚀 Starting Distribute-Only Pipeline..." -ForegroundColor Cyan
+        Write-Host "[START] Starting Distribute-Only Pipeline..." -ForegroundColor Cyan
     } else {
-        Write-Host "🚀 Starting Build Pipeline ($BUILD_MODE) for '$TARGET'..." -ForegroundColor Cyan
+        Write-Host "[START] Starting Build Pipeline ($BUILD_MODE) for '$TARGET'..." -ForegroundColor Cyan
     }
 
     # ------------------------------------------
     # STEP: PRE-FLIGHT CHECKS
     # ------------------------------------------
-    Step "🔍" "Pre-flight Checks & Validation..."
+    Step "[CHECK]" "Pre-flight Checks & Validation..."
 
     if ($HAS_DISTRIBUTE) {
         Check-Dependencies
@@ -1037,14 +1039,14 @@ try {
         if ($LASTEXITCODE -ne 0) { throw "git status failed" }
         if (-not [string]::IsNullOrWhiteSpace($gitStatus)) {
             if ($BUILD_MODE -eq "release") {
-                Write-Host "⚠️  WARNING: Working directory has uncommitted changes!" -ForegroundColor Yellow
+                Write-Host "[WARN] WARNING: Working directory has uncommitted changes!" -ForegroundColor Yellow
                 $ans = Read-Host "Continue with release build anyway? (y/N)"
                 if ($ans -notmatch "^[Yy]$") {
-                    Write-Host "❌ Build aborted." -ForegroundColor Red
+                    Write-Host "[ERROR] Build aborted." -ForegroundColor Red
                     exit 1
                 }
             } else {
-                Write-Host "ℹ️  Note: Working directory has uncommitted changes (allowed in $BUILD_MODE mode)." -ForegroundColor Cyan
+                Write-Host "[INFO] Note: Working directory has uncommitted changes (allowed in $BUILD_MODE mode)." -ForegroundColor Cyan
             }
         }
     }
@@ -1081,12 +1083,12 @@ try {
     
     $DATE_TAG = Get-Date -Format "yyyyMMdd_HHmm"
 
-    Write-Host "📌 Version       : $VERSION_NAME+$BUILD_NUMBER" -ForegroundColor Cyan
-    Write-Host "📌 Timestamp     : $DATE_TAG" -ForegroundColor Cyan
-    Write-Host "📌 Build Mode    : $BUILD_MODE" -ForegroundColor Cyan
-    Write-Host "📌 Target        : $TARGET" -ForegroundColor Cyan
-    if ($HAS_DISTRIBUTE) { Write-Host "📌 Distribute    : $DISTRIBUTE_TARGETS" -ForegroundColor Cyan }
-    if ($DRY_RUN) { Write-Host "📌 Dry Run       : YES (uploads will be skipped)" -ForegroundColor Cyan }
+    Write-Host "   Version       : $VERSION_NAME+$BUILD_NUMBER" -ForegroundColor Cyan
+    Write-Host "   Timestamp     : $DATE_TAG" -ForegroundColor Cyan
+    Write-Host "   Build Mode    : $BUILD_MODE" -ForegroundColor Cyan
+    Write-Host "   Target        : $TARGET" -ForegroundColor Cyan
+    if ($HAS_DISTRIBUTE) { Write-Host "   Distribute    : $DISTRIBUTE_TARGETS" -ForegroundColor Cyan }
+    if ($DRY_RUN) { Write-Host "   Dry Run       : YES (uploads will be skipped)" -ForegroundColor Cyan }
 
     # Determine artifact naming
     if ($BUILD_MODE -eq "release") {
@@ -1109,20 +1111,20 @@ try {
     if ($DISTRIBUTE_ONLY) {
         $foundFiles = Get-ChildItem -Path $BUILD_DIR -Filter "*.$ARTIFACT_EXT" -File -ErrorAction SilentlyContinue | Sort-Object LastWriteTime -Descending
         if ($foundFiles.Count -eq 0) {
-            Write-Host "❌ No .$ARTIFACT_EXT artifact found in $BUILD_DIR\" -ForegroundColor Red
+            Write-Host "[ERROR] No .$ARTIFACT_EXT artifact found in $BUILD_DIR\" -ForegroundColor Red
             Write-Host "   Build first before using --distribute-only." -ForegroundColor Red
             exit 1
         }
         $DEST_FILE = $foundFiles[0].FullName
         $DEST_FILE_FORWARD = $DEST_FILE -replace '\\', '/'
-        Write-Host "📦 Using existing artifact: $DEST_FILE_FORWARD" -ForegroundColor Cyan
+        Write-Host "[INFO] Using existing artifact: $DEST_FILE_FORWARD" -ForegroundColor Cyan
     }
 
     # ------------------------------------------
     # STEP: CLEAN & DEPENDENCIES (skip if distribute-only)
     # ------------------------------------------
     if (-not $DISTRIBUTE_ONLY) {
-        Step "🧹" "Cleaning previous build cache and fetching dependencies..."
+        Step "[CLEAN]" "Cleaning previous build cache and fetching dependencies..."
         flutter clean
         if ($LASTEXITCODE -ne 0) { throw "flutter clean failed" }
         flutter pub get
@@ -1131,7 +1133,7 @@ try {
         # ------------------------------------------
         # STEP: BUILD ARTIFACTS
         # ------------------------------------------
-        Step "🔨" "Compiling target '$TARGET' in '$BUILD_MODE' mode..."
+        Step "[BUILD]" "Compiling target '$TARGET' in '$BUILD_MODE' mode..."
 
         New-Item -ItemType Directory -Force -Path $BUILD_DIR | Out-Null
 
@@ -1144,7 +1146,7 @@ try {
         $SYMBOLS_OUTPUT = ""
         if ($ENABLE_OBFUSCATE) {
             if ($BUILD_MODE -eq "debug") {
-                Write-Host "⚠️  WARNING: Obfuscation is not supported in debug mode. Disabling." -ForegroundColor Yellow
+                Write-Host "[WARN] WARNING: Obfuscation is not supported in debug mode. Disabling." -ForegroundColor Yellow
                 $ENABLE_OBFUSCATE = $false
             } else {
                 New-Item -ItemType Directory -Force -Path $SYMBOLS_DIR | Out-Null
@@ -1155,7 +1157,7 @@ try {
                 }
                 $COMMON_ARGS += "--obfuscate"
                 $COMMON_ARGS += "--split-debug-info=$($SYMBOLS_OUTPUT -replace '\\', '/')"
-                Write-Host "🔒 Obfuscation enabled. Debug symbols: $SYMBOLS_OUTPUT" -ForegroundColor Cyan
+                Write-Host "[INFO] Obfuscation enabled. Debug symbols: $SYMBOLS_OUTPUT" -ForegroundColor Cyan
             }
         }
 
@@ -1173,7 +1175,7 @@ try {
                 if (Test-Path $OUTPUT_FILE) {
                     Copy-Item -Path $OUTPUT_FILE -Destination $DEST_FILE -Force
                 } else {
-                    Write-Host "❌ Error: Could not find generated .aab file." -ForegroundColor Red
+                    Write-Host "[ERROR] Error: Could not find generated .aab file." -ForegroundColor Red
                     exit 1
                 }
             }
@@ -1190,7 +1192,7 @@ try {
                 if (Test-Path $OUTPUT_FILE) {
                     Copy-Item -Path $OUTPUT_FILE -Destination $DEST_FILE -Force
                 } else {
-                    Write-Host "❌ Error: Could not find generated .apk file." -ForegroundColor Red
+                    Write-Host "[ERROR] Error: Could not find generated .apk file." -ForegroundColor Red
                     exit 1
                 }
             }
@@ -1201,10 +1203,10 @@ try {
     # STEP: DISTRIBUTE (if requested)
     # ------------------------------------------
     if ($HAS_DISTRIBUTE) {
-        Step "📤" "Distributing to: $DISTRIBUTE_TARGETS"
+        Step "[DIST]" "Distributing to: $DISTRIBUTE_TARGETS"
 
         if (-not (Test-Path $DEST_FILE)) {
-            Write-Host "❌ Artifact not found: $DEST_FILE_FORWARD" -ForegroundColor Red
+            Write-Host "[ERROR] Artifact not found: $DEST_FILE_FORWARD" -ForegroundColor Red
             exit 1
         }
 
@@ -1231,24 +1233,24 @@ try {
     }
 
     Write-Host "`n==========================================" -ForegroundColor Green
-    Write-Host "✅ $SUMMARY_LABEL FINISHED SUCCESSFULLY!" -ForegroundColor Green
-    Write-Host "🎯 Mode         : $BUILD_MODE" -ForegroundColor Green
-    Write-Host "🎯 Target       : $TARGET" -ForegroundColor Green
+    Write-Host "[OK] $SUMMARY_LABEL FINISHED SUCCESSFULLY!" -ForegroundColor Green
+    Write-Host "   Mode         : $BUILD_MODE" -ForegroundColor Green
+    Write-Host "   Target       : $TARGET" -ForegroundColor Green
     if (Test-Path $DEST_FILE) {
-        Write-Host "📦 Artifact     : $DEST_FILE_FORWARD" -ForegroundColor Green
+        Write-Host "   Artifact     : $DEST_FILE_FORWARD" -ForegroundColor Green
     } else {
-        Write-Host "📦 Output Dir   : $($BUILD_DIR -replace '\\', '/')" -ForegroundColor Green
+        Write-Host "   Output Dir   : $($BUILD_DIR -replace '\\', '/')" -ForegroundColor Green
     }
     if (-not [string]::IsNullOrEmpty($SYMBOLS_OUTPUT)) {
-        Write-Host "📂 Debug Symbols: $($SYMBOLS_OUTPUT -replace '\\', '/')" -ForegroundColor Green
+        Write-Host "   Debug Symbols: $($SYMBOLS_OUTPUT -replace '\\', '/')" -ForegroundColor Green
     }
     if ($HAS_DISTRIBUTE) {
-        Write-Host "📤 Distributed  : $DISTRIBUTE_TARGETS" -ForegroundColor Green
-        if ($DRY_RUN) { Write-Host "🏃 Dry Run      : Uploads were skipped" -ForegroundColor Green }
+        Write-Host "   Distributed  : $DISTRIBUTE_TARGETS" -ForegroundColor Green
+        if ($DRY_RUN) { Write-Host "   Dry Run      : Uploads were skipped" -ForegroundColor Green }
     }
     Write-Host "==========================================" -ForegroundColor Green
 
 } catch {
-    Write-Host "`n❌ ERROR: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "`n[ERROR] ERROR: $($_.Exception.Message)" -ForegroundColor Red
     exit 1
 }

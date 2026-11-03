@@ -1,5 +1,5 @@
 # ==========================================
-# Remote installer — PowerShell one-liner entry point
+# Remote installer - PowerShell one-liner entry point
 # ==========================================
 # irm https://raw.githubusercontent.com/inhvn/flutter-build-script/main/setup.ps1 | iex
 # Or if repository is private (via GitHub CLI):
@@ -10,14 +10,15 @@ $ErrorActionPreference = 'Stop'
 $InstallDir = Join-Path $env:USERPROFILE ".build_script"
 $RepoUrl = "https://github.com/inhvn/flutter-build-script.git"
 
-Write-Host "⚙️  Flutter Build Script — Remote Setup"
+Write-Host "[SETUP] Flutter Build Script - Remote Setup"
 Write-Host ""
 
 if (Test-Path (Join-Path $InstallDir ".git")) {
-    Write-Host "📥 Updating existing installation..."
+    Write-Host "[INFO] Updating existing installation..."
+    git -C "$InstallDir" reset --hard HEAD --quiet
     git -C "$InstallDir" pull --quiet
 } else {
-    Write-Host "📥 Cloning to $InstallDir..."
+    Write-Host "[INFO] Cloning to $InstallDir..."
     if (Test-Path $InstallDir) { Remove-Item -Path $InstallDir -Recurse -Force }
     git clone --quiet "$RepoUrl" "$InstallDir"
 }

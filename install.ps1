@@ -19,9 +19,9 @@ $CmdPath = Join-Path $BinDir "build_release.cmd"
 if ($args.Count -gt 0 -and $args[0] -eq '--uninstall') {
     if (Test-Path $CmdPath) {
         Remove-Item -Path $CmdPath -Force
-        Write-Host "✅ Removed $CmdPath"
+        Write-Host "[OK] Removed $CmdPath"
     } else {
-        Write-Host "ℹ️  Nothing to remove — $CmdPath does not exist."
+        Write-Host "[INFO] Nothing to remove - $CmdPath does not exist."
     }
     exit 0
 }
@@ -36,12 +36,12 @@ function Install-Dependencies {
 
     if (-not $needRuby -and -not $needBundler -and -not $needFastlane) {
         $rubyVersion = (ruby -e "print RUBY_VERSION")
-        Write-Host "✅ Dependencies: ruby $rubyVersion, bundler, fastlane — all present."
+        Write-Host "[OK] Dependencies: ruby $rubyVersion, bundler, fastlane - all present."
         return
     }
 
     Write-Host ""
-    Write-Host "📦 Installing missing dependencies..."
+    Write-Host "[INFO] Installing missing dependencies..."
 
     if ($needRuby) {
         if (Get-Command choco -ErrorAction SilentlyContinue) {
@@ -49,7 +49,7 @@ function Install-Dependencies {
             choco install ruby -y
             $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('Path', 'User')
         } else {
-            Write-Host "❌ Ruby is not installed and Chocolatey is not available."
+            Write-Host "[ERROR] Ruby is not installed and Chocolatey is not available." -ForegroundColor Red
             Write-Host "   Please install Ruby manually from https://rubyinstaller.org"
             Write-Host "   or install Chocolatey (https://chocolatey.org) and re-run this installer."
             exit 1
@@ -66,13 +66,13 @@ function Install-Dependencies {
         gem install fastlane
     }
 
-    Write-Host "✅ Dependencies installed."
+    Write-Host "[OK] Dependencies installed."
 }
 
 # ------------------------------------------
 # Install CLI
 # ------------------------------------------
-Write-Host "⚙️  Installing build_release CLI..."
+Write-Host "[SETUP] Installing build_release CLI..."
 Write-Host ""
 
 Install-Dependencies
@@ -87,9 +87,9 @@ $wrapperLines = @(
     '@echo off'
     'powershell -ExecutionPolicy Bypass -NoProfile -File "%USERPROFILE%\.build_script\scripts\build_release.ps1" %*'
 )
-Set-Content -Path $CmdPath -Value $wrapperLines
+Set-Content -Path $CmdPath -Value $wrapperLines -Encoding ASCII
 
-Write-Host "✅ Installed: $CmdPath"
+Write-Host "[OK] Installed: $CmdPath"
 
 # Check & update user PATH
 $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
@@ -113,7 +113,7 @@ if (-not $alreadyInPath) {
     [Environment]::SetEnvironmentVariable('Path', $newUserPath, 'User')
     $env:Path = "$env:Path;$BinDir"
     Write-Host ""
-    Write-Host "⚠️  Added $BinDir to your User PATH."
+    Write-Host "[WARN] Added $BinDir to your User PATH." -ForegroundColor Yellow
     Write-Host "   Restart your terminal for changes to take effect in other windows."
 }
 
@@ -125,10 +125,10 @@ if (-not (Test-Path $gplayDir)) { New-Item -ItemType Directory -Path $gplayDir -
 if (-not (Test-Path $appstoreDir)) { New-Item -ItemType Directory -Path $appstoreDir -Force | Out-Null }
 if (-not (Test-Path $slackDir)) { New-Item -ItemType Directory -Path $slackDir -Force | Out-Null }
 
-Write-Host "📁 Credential directories ready:" -ForegroundColor Cyan
+Write-Host "[INFO] Credential directories ready:" -ForegroundColor Cyan
 Write-Host "   - $gplayDir\    (Place Google Play service-account.json here)"
 Write-Host "   - $appstoreDir\ (Place App Store Connect AuthKey_*.p8 here)"
 Write-Host "   - $slackDir\    (Place webhook_url file here for global Slack notifications)"
 
 Write-Host ""
-Write-Host "🚀 Ready! Run 'build_release --help' from any Flutter project."
+Write-Host "[READY] Run 'build_release --help' from any Flutter project." -ForegroundColor Green
